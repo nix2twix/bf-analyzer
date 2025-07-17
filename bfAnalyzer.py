@@ -1,42 +1,19 @@
 ﻿# === LIBRARIES GENERAL ===
 import streamlit as st
 import json
+from PIL import Image
+from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 # === PROJECT SCRIPTS ===
 from processHandler import startProcessing
-
+from processingFunctions import cropLineBelow
+from styles import loadStyles
 # === PAGE CONFIGURATION ===
 st.set_page_config(
     page_title="Biofilm Analyzer",
     layout="wide"
 )
-
-st.markdown("""
-    <style>
-        .stApp {
-            padding: 1rem 1rem 1rem 1rem !important;
-            margin: 0 !important;
-        }
-        
-        .stMarkdown h1 {
-            margin-top: 0.5rem !important;
-            padding-top: 0 !important;
-        }
-        
-        .stMarkdown p {
-            margin-bottom:0;
-        }
-        
-        div.stContainer > div:first-child {
-            padding-top: 0.5rem !important;
-        }
-        
-        .stSlider, .stSelectbox, .stButton {
-            margin-top: 0.2rem !important;
-            margin-bottom: 0.2rem !important;
-        }
-    </style>
-""", unsafe_allow_html=True)
+loadStyles()
 
 # === SESSION STATE ===
 if "image_bytes" not in st.session_state:
@@ -53,8 +30,10 @@ if "area_range" not in st.session_state:
     st.session_state.area_range = (50, 1155)
 if "min_ecc" not in st.session_state:
     st.session_state.min_ecc = 0.85
+if "uploaded_image" not in st.session_state:
+    st.session_state.uploaded_image = None
 
-
+width, height = 0, 0
 # ============== Блок 1: Заголовок и описание ==============
 with st.container():
     col1, col2 = st.columns([1, 4])
@@ -80,7 +59,7 @@ with col_settings:
 
     # Cлайдеры
     area_range = st.slider(
-        "Area range (px)",
+        "Single bacteria area range (px)",
         min_value=0, 
         max_value=2000,
         value=st.session_state.area_range,  
@@ -88,23 +67,23 @@ with col_settings:
     )
 
     min_ecc = st.slider(
-        "Minimum eccentricity",
+        "Single bacteria minimum eccentricity",
         min_value=0.0, 
         max_value=1.0,
         value=st.session_state.min_ecc, 
-        key="ecc_slider"
+        key="ecc_slider",
+        help="An eccentricity equal to zero corresponds to a perfect circle, and equal to 1 corresponds to a parabola."
     )
 
     st.session_state.area_range = area_range
     st.session_state.min_ecc = min_ecc
-    
     # Статистики
-    if st.session_state.get("biofilm_mkm_area") is not None:
+    if (st.session_state.image_bytes is not None) and (st.session_state.get("biofilm_mkm_area") is not None):
         st.markdown("### 📊 Statistics")
-        st.markdown(f"Biofilm area: {st.session_state.biofilm_mkm_area:g} (μm<sup>2</sup>)", unsafe_allow_html=True)
+        st.markdown(f"Biofilm area: {st.session_state.biofilm_mkm_area:g} (μm<sup>2</sup>, {(st.session_state.biofilm_mkm_area / (width * height + 1e-6)):g}%)", unsafe_allow_html=True)
         st.markdown(f"Single bacterias count: {st.session_state.bacteria_count}")
-        st.markdown(f"Single bacterias area: {st.session_state.bacteries_area:g} (μm<sup>2</sup>)", unsafe_allow_html=True)
-        
+        st.markdown(f"Single bacterias area: {(st.session_state.bacteries_mkm_area):g} (μm<sup>2</sup>, {(st.session_state.bacteries_mkm_area / (width * height + 1e-6)):g}%)", unsafe_allow_html=True)
+ 
 
 # === Центральная панель: Workflow ===
 with col_workspace:
@@ -128,13 +107,18 @@ with col_tools:
 
     # Загрузка изображения
     uploaded_file = st.file_uploader("Load image", type=["bmp", "png", "jpg"], key="uploader")
-
+    
     if uploaded_file is not None and uploaded_file.name != st.session_state.image_name:
+        st.session_state.uploaded_file = uploaded_file
         st.session_state.image_bytes = uploaded_file.read()
         st.session_state.processed_image_bytes = None
         st.session_state.is_image_processed = False
         st.session_state.is_image_uploaded = True
+        
         st.session_state.image_name = uploaded_file.name
+        image = Image.open(st.session_state.uploaded_file)
+        image = cropLineBelow(image, 128)
+        width, height = image.size
         st.rerun()
         
     # Сброс изображения
@@ -172,6 +156,9 @@ with col_tools:
             if result != None:
                 st.session_state.processed_image_bytes = result[0]
                 st.session_state.is_image_processed = True
+                st.session_state.biofilm_mkm_area = result[1]["biofilm_mkm_area"]
+                st.session_state.bacteria_count = result[1]["bacteria_count"]
+                st.session_state.bacteries_mkm_area = result[1]["bacteries_mkm_area"]
                 st.rerun()
                 
     

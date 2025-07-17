@@ -58,7 +58,7 @@ def startProcessing(image_bytes,
             width, height = img.size
             imgPatches, patchesInfo = makePatches(img, imgName, 
                                                   patch_size = (512, 512),
-                                                  stride=(256,256))
+                                                  stride=(384,384))
         else:
             imgPatches.append(img)
             patchesInfo.append((0, 0, 0))
@@ -154,7 +154,7 @@ def startProcessing(image_bytes,
         "biofilm_area": int(np.sum(biofilm_mask)),
         "biofilm_mkm_area": int(np.sum(biofilm_mask)) * 0.05,
         "bacteria_count": int(bacteria_count),
-        "bacteries_area": int(np.sum(bacteria_count)) * 0.05
+        "bacteries_mkm_area": int(np.sum(bacteria_mask)) * 0.05
         }
         
         print(f"PROCESSED SUCCESSFULLY!")

@@ -24,9 +24,14 @@
     <Compile Include="bfAnalyzer.py" />
     <Compile Include="processHandler.py" />
     <Compile Include="processingFunctions.py" />
+    <Compile Include="styles.py" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include=".streamlit\config.toml" />
     <Content Include="final_model_epoch_350.pth" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include=".streamlit\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
