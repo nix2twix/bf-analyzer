@@ -4,6 +4,8 @@ import json
 from PIL import Image
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 
+from streamlit.runtime.uploaded_file_manager import UploadedFile
+
 # === PROJECT SCRIPTS ===
 from processHandler import startProcessing
 from processingFunctions import cropLineBelow
@@ -143,7 +145,30 @@ with col_tools:
                 "max_area": st.session_state.area_range[1],
                 "min_ecc": st.session_state.min_ecc,
             }
-            
+            '''
+            from gradio_client import Client, handle_file
+            import base64
+
+            def prepare_file_for_gradio(uploaded_file):
+                uploaded_file.seek(0)
+                file_data = uploaded_file.read()
+                b64_data = base64.b64encode(file_data).decode('utf-8')
+                data_url = f"data:{uploaded_file.type};base64,{b64_data}"
+                return data_url
+
+            file_data_url = prepare_file_for_gradio(uploaded_file)
+            client = Client("mouseland/cellpose")
+
+            result = client.predict(
+                filepath=[file_data_url],
+                resize=1000,
+                max_iter=250,
+                flow_threshold=0.4,
+                cellprob_threshold=0,
+                api_name="/cellpose_segment"
+            )
+            print(result)
+            '''
             result = startProcessing(uploaded_file,
                                      st.session_state.image_name,
                                      params["min_area"], 

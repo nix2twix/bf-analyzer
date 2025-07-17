@@ -41,14 +41,14 @@ def filterMasks(masks, probs, min_area, max_area, min_circularity=0.85):
 
 # === PROCESSING BLOCK ===
 @st.cache_data(show_spinner = False)
-def startProcessing(image_bytes, 
+def startProcessing(uploadedFile, 
                     imgName,
                     min_area,
                     max_area, 
                     min_ecc):
     
-    if image_bytes != None:
-        img = Image.open(image_bytes)
+    if uploadedFile != None:
+        img = Image.open(uploadedFile)
         width, height = img.size
         imgPatches = []
         patchesInfo = []
@@ -106,6 +106,7 @@ def startProcessing(image_bytes,
         cleaned_image[biofilmPredictions == 1] = 0 #black 
         
         print(f"[INFO] START CELLPOSE-SAM PROCESSING...")
+
         model_cp = loadCellposeModel() 
         singlePredictions, flows, styles = model_cp.eval(cleaned_image, channels=[0, 0])
 
@@ -161,22 +162,48 @@ def startProcessing(image_bytes,
     
         return processedImgBytes, resultInfo
     else:
-        return image_bytes
+        return uploadedFile
+
     
 if __name__ == "__main__":
+    # API
+    from gradio_client import Client, handle_file
+    import base64
+    import requests
+
+    def prepare_file_for_gradio(uploaded_file):
+        uploaded_file.seek(0)
+        file_data = uploaded_file.read()
+        b64_data = base64.b64encode(file_data).decode('utf-8')
+        data_url = f"data:bmp;base64,{b64_data}"
+        return data_url
+
+    file_data_url = prepare_file_for_gradio(uploaded_file)
+    client = Client("mouseland/cellpose")
+    result = client.predict(
+        filepath=[file_data_url],
+        resize=1000,
+        max_iter=250,
+        flow_threshold=0.4,
+        cellprob_threshold=0,
+        api_name="/cellpose_segment"
+    )
+    print(result)
+    # API
+
+       
+# if __name__ == "__main__":
     
-    with open("1-BSE-1k-T1.bmp", "rb") as fh:
-        uploaded_file = BytesIO(fh.read())
+#     with open("1-BSE-1k-T1.bmp", "rb") as fh:
+#         uploaded_file = BytesIO(fh.read())
         
-        result = startProcessing(uploaded_file,
-                                "1-BSE-1k-T1.bmp",
-                                50, 
-                                2000, 
-                                0.85)
+#         result = startProcessing(uploaded_file,
+#                                 "1-BSE-1k-T1.bmp",
+#                                 50, 
+#                                 2000, 
+#                                 0.85)
     
-        image = Image.open(BytesIO(result[0]))
-        image.show()
-    
-    
+#         image = Image.open(BytesIO(result[0]))
+#         image.show()
     
     
