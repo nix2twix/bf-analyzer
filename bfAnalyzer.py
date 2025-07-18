@@ -67,7 +67,7 @@ with blockSettings:
         key="singleBacteriesArea_slider",
         help="Area of single microorganism"
     )
-
+     
     singleBacteriesMinEcc = st.slider(
         "Single bacteria minimum eccentricity",
         min_value=0.0, 
