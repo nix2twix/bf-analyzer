@@ -1,15 +1,12 @@
 ﻿# === LIBRARIES GENERAL ===
 import streamlit as st
-import json
 from PIL import Image
-from streamlit.runtime.uploaded_file_manager import UploadedFile
-
-from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 # === PROJECT SCRIPTS ===
-from processHandler import startProcessing
+from processHandler import startProcessing, startFiltration
 from processingFunctions import cropLineBelow
 from styles import loadStyles
+
 # === PAGE CONFIGURATION ===
 st.set_page_config(
     page_title="Biofilm Analyzer",
@@ -18,24 +15,27 @@ st.set_page_config(
 loadStyles()
 
 # === SESSION STATE ===
-if "image_bytes" not in st.session_state:
-    st.session_state.image_bytes = None
-if "is_image_uploaded" not in st.session_state:
-    st.session_state.is_image_uploaded = False
-if "image_name" not in st.session_state:
-    st.session_state.image_name = ""
-if "processed_image_bytes" not in st.session_state:
-    st.session_state.processed_image = None
-if "is_image_processed" not in st.session_state:
-    st.session_state.is_image_processed = False   
-if "area_range" not in st.session_state:
-    st.session_state.area_range = (50, 1155)
-if "min_ecc" not in st.session_state:
-    st.session_state.min_ecc = 0.85
-if "uploaded_image" not in st.session_state:
-    st.session_state.uploaded_image = None
-
-width, height = 0, 0
+if "imageName" not in st.session_state:
+    st.session_state.imageName = ""
+if "singleBacteriesAreaRange" not in st.session_state:
+    st.session_state.singleBacteriesAreaRange = (50, 3000)
+if "singleBacteriesMinEcc" not in st.session_state:
+    st.session_state.singleBacteriesMinEcc = 0.85
+if "bfAreaRange" not in st.session_state:
+    st.session_state.bfAreaRange = (0, 100)
+if "uploadedFile" not in st.session_state:
+    st.session_state.uploadedFile = None
+if "imgWidth" not in st.session_state:
+    st.session_state.imgWidth = 0
+if "imgHeight" not in st.session_state:
+    st.session_state.imgHeight = 0
+if "processedImageBytes" not in st.session_state:
+    st.session_state.processedImageBytes = None
+if "predictedLabels" not in st.session_state:
+    st.session_state.predictedLabels = None
+if "resultInfo" not in st.session_state:
+    st.session_state.resultInfo = None
+    
 # ============== Блок 1: Заголовок и описание ==============
 with st.container():
     col1, col2 = st.columns([1, 4])
@@ -53,137 +53,147 @@ Set the analysis parameters on the left, upload the image, and get the processin
 st.markdown('<hr style="margin: 0.5rem 0;">', unsafe_allow_html=True)
 
 # ============== Блок 2: Интерфейс ==============
-col_settings, col_workspace, col_tools = st.columns([1, 2.5, 1])
+blockSettings, blockWorkspace, blockTools = st.columns([1, 2.8, 1])
 
 # === Левая панель: Settings ===
-with col_settings:
-    st.markdown("### ⚙️ Settings")
-
+with blockSettings:
+    st.markdown("### ⚙️ Filtration sttings")
     # Cлайдеры
-    area_range = st.slider(
+    singleBacteriesAreaRange = st.slider(
         "Single bacteria area range (px)",
         min_value=0, 
-        max_value=2000,
-        value=st.session_state.area_range,  
-        key="area_slider"
+        max_value=5000,
+        value=st.session_state.singleBacteriesAreaRange,  
+        key="singleBacteriesArea_slider",
+        help="Area of single microorganism"
     )
 
-    min_ecc = st.slider(
+    singleBacteriesMinEcc = st.slider(
         "Single bacteria minimum eccentricity",
         min_value=0.0, 
         max_value=1.0,
-        value=st.session_state.min_ecc, 
-        key="ecc_slider",
-        help="An eccentricity equal to zero corresponds to a perfect circle, and equal to 1 corresponds to a parabola."
+        value=st.session_state.singleBacteriesMinEcc, 
+        key="singleBacteriesEcc_slider",
+        help="An eccentricity equal to zero corresponds to a perfect circle, and equal to 1 corresponds to a parabola"
     )
-
-    st.session_state.area_range = area_range
-    st.session_state.min_ecc = min_ecc
-    # Статистики
-    if (st.session_state.image_bytes is not None) and (st.session_state.get("biofilm_mkm_area") is not None):
+    
+    bfAreaRange = st.slider(
+            "Biofilm area range (%)",
+            min_value=0, 
+            max_value=100,
+            value=st.session_state.bfAreaRange,  
+            key="bfArea_slider",
+            help="Biofilm area range as a percentage of the image size"
+        )
+    
+    # Фильтрация результатов обработки
+    if (st.session_state.processedImageBytes != None):
+        
+        width = st.session_state.imgWidth
+        height = st.session_state.imgHeight
+        imgSize = width * height    
+        
+        filteredResult = startFiltration(st.session_state.processedImageBytes,
+                                        st.session_state.predictedLabels,
+                                        singleBacteriesAreaRange[0], 
+                                        singleBacteriesAreaRange[1], 
+                                        singleBacteriesMinEcc,
+                                        bfAreaRange[0],
+                                        bfAreaRange[1],
+                                        imgSize,
+                                        0.05)
+        
+        st.session_state.processedImageBytes = filteredResult[0]
+        st.session_state.resultsInfo = filteredResult[1]
+        biofilmArea = filteredResult[1]["biofilm_mkm_area"]
+        bacteriesCount = filteredResult[1]["bacteria_count"]
+        bacteriesArea = filteredResult[1]["bacteries_mkm_area"]
+        st.session_state.singlePredictions = filteredResult[2]["single"]
+        st.session_state.bfPredictions = filteredResult[2]["bf"]
+        
         st.markdown("### 📊 Statistics")
-        st.markdown(f"Biofilm area: {st.session_state.biofilm_mkm_area:g} (μm<sup>2</sup>, {(st.session_state.biofilm_mkm_area / (width * height + 1e-6)):g}%)", unsafe_allow_html=True)
-        st.markdown(f"Single bacterias count: {st.session_state.bacteria_count}")
-        st.markdown(f"Single bacterias area: {(st.session_state.bacteries_mkm_area):g} (μm<sup>2</sup>, {(st.session_state.bacteries_mkm_area / (width * height + 1e-6)):g}%)", unsafe_allow_html=True)
+        st.markdown(f"Biofilm area: {biofilmArea:g} (μm<sup>2</sup>, {(biofilmArea / (width * height + 1e-6)):g}%)", unsafe_allow_html=True)
+        st.markdown(f"Single bacterias count: {bacteriesCount}")
+        st.markdown(f"Single bacterias area: {(bacteriesArea):g} (μm<sup>2</sup>, {(bacteriesArea / (width * height + 1e-6)):g}%)", unsafe_allow_html=True)
  
 
 # === Центральная панель: Workflow ===
-with col_workspace:
+with blockWorkspace:
     st.markdown("### 🔬 Workflow")
     
-    if st.session_state.is_image_processed and st.session_state.processed_image_bytes != None:
-        st.image(image = st.session_state.processed_image_bytes, 
-                 caption = f"Processing {st.session_state.image_name} result", 
+    if st.session_state.processedImageBytes != None:
+        st.image(image = st.session_state.processedImageBytes, 
+                 caption = f"Processing {st.session_state.imageName} result", 
                  use_container_width=True)
         
-    elif st.session_state.is_image_uploaded and st.session_state.image_bytes != None:
-        st.image(image = st.session_state.image_bytes, 
-                 caption = f"Loaded SEM-image {st.session_state.image_name}", 
+    elif st.session_state.uploadedFile != None:
+        st.image(image = st.session_state.imageBytes, 
+                 caption = f"Loaded SEM-image {st.session_state.imageName}", 
                  use_container_width=True)
     else:
         st.info("SEM-image wasn't uploaded")
 
 # === Правая панель: Инструменты ===
-with col_tools:
+with blockTools:
     st.markdown("### 🛠 Tools")
 
     # Загрузка изображения
-    uploaded_file = st.file_uploader("Load image", type=["bmp", "png", "jpg"], key="uploader")
+    uploadedFile = st.file_uploader("Load image", type=["bmp", "png", "jpg"], key="uploader")
     
-    if uploaded_file is not None and uploaded_file.name != st.session_state.image_name:
-        st.session_state.uploaded_file = uploaded_file
-        st.session_state.image_bytes = uploaded_file.read()
-        st.session_state.processed_image_bytes = None
-        st.session_state.is_image_processed = False
-        st.session_state.is_image_uploaded = True
+    if uploadedFile is not None and uploadedFile.name != st.session_state.imageName:
+        st.session_state.uploadedFile = uploadedFile
+        st.session_state.processedImageBytes = None
+        st.session_state.imageName = uploadedFile.name
         
-        st.session_state.image_name = uploaded_file.name
-        image = Image.open(st.session_state.uploaded_file)
+        image = Image.open(uploadedFile)
         image = cropLineBelow(image, 128)
-        width, height = image.size
+        st.session_state.imgWidth, st.session_state.imgHeight = image.size
         st.rerun()
         
     # Сброс изображения
-    elif uploaded_file is None and st.session_state.is_image_uploaded:
-        st.session_state.image_bytes = None
-        st.session_state.processed_image_bytes = None
-        st.session_state.is_image_processed = False
-        st.session_state.is_image_uploaded = False
-        st.session_state.image_name = ""
+    elif uploadedFile is None:
+        st.session_state.uploadedFile = None
+        st.session_state.processedImageBytes = None
+        st.session_state.imageName = ""
+        st.session_state.imgWidth, st.session_state.imgHeight = 0, 0
         st.rerun()
         
     # --- Инструменты ---
-    seg_button_clicked = st.button("🧪 Start segmentation", disabled=st.session_state.image_bytes is None)
+    seg_button_clicked = st.button("🧪 Start segmentation", disabled=st.session_state.uploadedFile is None)
     #st.button("🔍 Zoom (see later)")
     #st.button("💾 Save results (see later)")
 
     if seg_button_clicked:
         with st.spinner("⏳ Image processing..."):
-
             params = {
-                "min_area": st.session_state.area_range[0],
-                "max_area": st.session_state.area_range[1],
-                "min_ecc": st.session_state.min_ecc,
+                "minSingleArea": st.session_state.singleBacteriesAreaRange[0],
+                "maxSingleArea": st.session_state.singleBacteriesAreaRange[1],
+                "minSingleEcc": st.session_state.singleBacteriesMinEcc,
+                "minBfArea": st.session_state.bfAreaRange[0],
+                "maxBfArea": st.session_state.bfAreaRange[1]
             }
-            '''
-            from gradio_client import Client, handle_file
-            import base64
-
-            def prepare_file_for_gradio(uploaded_file):
-                uploaded_file.seek(0)
-                file_data = uploaded_file.read()
-                b64_data = base64.b64encode(file_data).decode('utf-8')
-                data_url = f"data:{uploaded_file.type};base64,{b64_data}"
-                return data_url
-
-            file_data_url = prepare_file_for_gradio(uploaded_file)
-            client = Client("mouseland/cellpose")
-
-            result = client.predict(
-                filepath=[file_data_url],
-                resize=1000,
-                max_iter=250,
-                flow_threshold=0.4,
-                cellprob_threshold=0,
-                api_name="/cellpose_segment"
-            )
-            print(result)
-            '''
-            result = startProcessing(uploaded_file,
-                                     st.session_state.image_name,
-                                     params["min_area"], 
-                                     params["max_area"], 
-                                     params["min_ecc"])
+            
+            result = startProcessing(uploadedFile,
+                                     st.session_state.imageName)
+                        
+            filteredResult = startFiltration(result,
+                                     params["minSingleArea"], 
+                                     params["maxSingleArea"], 
+                                     params["minSingleEcc"],
+                                     params["minBfArea"],
+                                     params["maxBfArea"],
+                                     width * height,
+                                     0.05)     
+            
+            st.session_state.processedImageBytes = filteredResult[0]
+            st.session_state.biofilm_mkm_area = filteredResult[1]["biofilm_mkm_area"]
+            st.session_state.bacteriaCount = filteredResult[1]["bacteria_count"]
+            st.session_state.bacteries_mkm_area = filteredResult[1]["bacteries_mkm_area"]
+            st.session_state.singlePredictions = filteredResult[2]["single"]
+            st.session_state.bfPredictions = filteredResult[2]["bf"]
             
             st.write("📤 Processing finished")
             print("[INFO] Processed finished successfully!")
-            
-            if result != None:
-                st.session_state.processed_image_bytes = result[0]
-                st.session_state.is_image_processed = True
-                st.session_state.biofilm_mkm_area = result[1]["biofilm_mkm_area"]
-                st.session_state.bacteria_count = result[1]["bacteria_count"]
-                st.session_state.bacteries_mkm_area = result[1]["bacteries_mkm_area"]
-                st.rerun()
+            st.rerun()
                 
     

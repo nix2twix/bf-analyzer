@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>ce49cf83-dbe2-479f-b0f8-76dc3c6c6c8c</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>processHandler.py</StartupFile>
+    <StartupFile>bfAnalyzer.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>

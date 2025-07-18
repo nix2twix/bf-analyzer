@@ -4,7 +4,7 @@ enableCORS = false
 
 [theme]
 base = "dark"
-primaryColor = "#05e977"
+primaryColor = "#dd4492"
 backgroundColor = "#0E1117"
 secondaryBackgroundColor = "#262730" 
 

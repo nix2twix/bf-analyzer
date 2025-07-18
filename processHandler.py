@@ -3,15 +3,15 @@ CHECKPOINTPATH = "final_model_epoch_350.pth"
 PATTERN = r'\.(\d+)_(\d+)\.png$'
 
 # === LIBRARIES GENERAL ===
-import io   
+import cv2  
 import torch
 
 import streamlit as st
 import numpy as np
 
 from skimage import measure
+from skimage.measure import label, regionprops
 from PIL import Image
-from cellpose import io
 from torch.utils.data import DataLoader
 from io import BytesIO
 
@@ -24,35 +24,19 @@ from processingFunctions import buildModel, loadCheckpoint, loadCellposeModel
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-def filterMasks(masks, probs, min_area, max_area, min_circularity=0.85):
-    props = measure.regionprops(masks)
-    areas = [prop.area for prop in props]
-    filtered_probs = np.copy(probs)
-    filtered_masks = np.copy(masks)
-    for prop in props:
-        ecc = prop.eccentricity 
-        
-        if (prop.area > max_area) or (prop.eccentricity < min_circularity) or (prop.area < min_area):
-            filtered_masks[filtered_masks == prop.label] = 0
-            filtered_probs[filtered_masks == prop.label] = 0.0
-
-    return filtered_masks, filtered_probs
-
-
 # === PROCESSING BLOCK ===
 @st.cache_data(show_spinner = False)
-def startProcessing(uploadedFile, 
-                    imgName,
-                    min_area,
-                    max_area, 
-                    min_ecc):
+def startProcessing(image_bytes, 
+                    imgName
+                    ):
     
-    if uploadedFile != None:
-        img = Image.open(uploadedFile)
+    if image_bytes != None:
+        img = Image.open(image_bytes)
         width, height = img.size
         imgPatches = []
         patchesInfo = []
         print(f"[INFO] START PROCESSING {imgName}...")
+        
         if ((height > 512) or (width > 512)):
             img = cropLineBelow(img, countPx=128)
             width, height = img.size
@@ -106,17 +90,8 @@ def startProcessing(uploadedFile,
         cleaned_image[biofilmPredictions == 1] = 0 #black 
         
         print(f"[INFO] START CELLPOSE-SAM PROCESSING...")
-
         model_cp = loadCellposeModel() 
-        singlePredictions, flows, styles = model_cp.eval(cleaned_image, channels=[0, 0])
-
-        singleProbs = 1 / (1 + np.exp(-singlePredictions))
-
-        singlePredictions, singleProbs = filterMasks(singlePredictions, 
-                                                        singleProbs, 
-                                                        min_area, 
-                                                        max_area, 
-                                                        min_ecc)
+        singlePredictions, flows, styles = model_cp.eval(cleaned_image, channels=[0, 0], flow_threshold=1, cellprob_threshold=2)
     
         # PREDICTIONS
         singlePredictions = np.array(singlePredictions != 0, dtype=np.uint8)
@@ -158,52 +133,76 @@ def startProcessing(uploadedFile,
         "bacteries_mkm_area": int(np.sum(bacteria_mask)) * 0.05
         }
         
+        predictedLabels = {
+        "single": singlePredictions, 
+        "bf": biofilmPredictions
+        }
+        
         print(f"PROCESSED SUCCESSFULLY!")
     
-        return processedImgBytes, resultInfo
+        return processedImgBytes, resultInfo, predictedLabels
     else:
-        return uploadedFile
-
+        return image_bytes
+    
+def startFiltration(processedImgBytes,
+                    predictedLabels, 
+                    minSingleArea,
+                    maxSingleArea, 
+                    minEcc,
+                    minBfAreaPercent,
+                    maxBfAreaPercent,
+                    imgSize,
+                    scale = 0.05):
+    
+    singlePredictions = predictedLabels[0] 
+    bfPredictions = predictedLabels[1]
+    
+    # SINGLE BACTERIES FILTRATION
+    props = measure.regionprops(singlePredictions)
+    filteredSingleMasks = np.copy(singlePredictions)
+    for prop in props:
+        if (prop.area > maxSingleArea) or (prop.eccentricity < minEcc) or (prop.area < minSingleArea):
+            filteredSingleMasks[filteredSingleMasks == prop.label] = 0
+            labeled_bacteria = measure.label(singlePredictions)
+    
+    # BIOFILM FILTRATION
+    mask_uint8 = (bfPredictions * 255).astype(np.uint8)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    closed = cv2.morphologyEx(mask_uint8, cv2.MORPH_CLOSE, kernel)
+    
+    labeled_mask = label(closed > 0, connectivity=2)
+    filteredBfMask = np.zeros_like(bfPredictions)
+    for region in regionprops(labeled_mask):
+        if (region.area >= ((maxBfAreaPercent/ 100) * imgSize)) or (region.area < ((minBfAreaPercent/ 100) * imgSize)):
+            filteredBfMask[labeled_mask == region.label] = 1
+    
+    resultInfo = {
+    "biofilm_area": int(np.sum(bfPredictions)),
+    "biofilm_mkm_area": int(np.sum(bfPredictions)) * scale,
+    "bacteria_count": int(labeled_bacteria.max()),
+    "bacteries_mkm_area": int(np.sum(singlePredictions)) * scale
+    }
+    
+    predictedLabels = {
+    "single": singlePredictions, 
+    "bf": bfPredictions
+    }
+    return processedImgBytes, resultInfo, predictedLabels
     
 if __name__ == "__main__":
-    # API
-    from gradio_client import Client, handle_file
-    import base64
-    import requests
-
-    def prepare_file_for_gradio(uploaded_file):
-        uploaded_file.seek(0)
-        file_data = uploaded_file.read()
-        b64_data = base64.b64encode(file_data).decode('utf-8')
-        data_url = f"data:bmp;base64,{b64_data}"
-        return data_url
-
-    file_data_url = prepare_file_for_gradio(uploaded_file)
-    client = Client("mouseland/cellpose")
-    result = client.predict(
-        filepath=[file_data_url],
-        resize=1000,
-        max_iter=250,
-        flow_threshold=0.4,
-        cellprob_threshold=0,
-        api_name="/cellpose_segment"
-    )
-    print(result)
-    # API
-
-       
-# if __name__ == "__main__":
     
-#     with open("1-BSE-1k-T1.bmp", "rb") as fh:
-#         uploaded_file = BytesIO(fh.read())
+    with open("1-BSE-1k-T1.bmp", "rb") as fh:
+        uploaded_file = BytesIO(fh.read())
         
-#         result = startProcessing(uploaded_file,
-#                                 "1-BSE-1k-T1.bmp",
-#                                 50, 
-#                                 2000, 
-#                                 0.85)
+        result = startProcessing(uploaded_file,
+                                "1-BSE-1k-T1.bmp",
+                                50, 
+                                2000, 
+                                0.85)
     
-#         image = Image.open(BytesIO(result[0]))
-#         image.show()
+        image = Image.open(BytesIO(result[0]))
+        image.show()
+    
+    
     
     

@@ -3,6 +3,10 @@ import streamlit as st
 def loadStyles():
     st.markdown("""
         <style>
+            ::-webkit-scrollbar {{
+                display: none;
+            }}
+                
             .stApp {
                 padding: 1rem 1rem 1rem 1rem !important;
                 margin: 0 !important;
@@ -22,21 +26,9 @@ def loadStyles():
             }
             
             div.stSlider > div[data-baseweb="slider"] > div > div > div[role="slider"]{
-            background-color: rgb(255, 255, 255);
+                background-color: rgb(255, 255, 255);
             }            
             
-            div.stSlider > div[data-baseweb="slider"] > div > div > div > div
-                                { color: rgb(255, 255, 255); }    
-                
-            div.stSlider > div[data-baseweb = "slider"] > div[data-testid="stSliderTickBar"] > div {
-                background: rgb(1 1 1 / 0%); 
-                }
-                
-            div.stSlider > div[data-baseweb = "slider"] > div > div {
-            background: linear-gradient(to right,       
-                rgb(184, 61, 245) 100%);
-
-            }
          
             .stSlider, .stSelectbox, .stButton {
                 margin-top: 0.2rem !important;
