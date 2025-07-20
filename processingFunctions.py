@@ -14,7 +14,7 @@ from torch.utils.data import Dataset
 from albumentations.pytorch import ToTensorV2
 
 # === CLASSES ===
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from PIL import Image
 import numpy as np
 import albumentations as A
@@ -96,8 +96,7 @@ def cropLineBelow(imgPIL, countPx=120):
     cropped_img = imgPIL.crop((0, 0, width, height - countPx))
     return cropped_img
 
-def makePatches(imgPIL, img_name, patch_size=(512, 512), stride=(128, 128)):
-    
+def makePatches(imgPIL, patch_size=(512, 512), stride=(128, 128)):   
     imgPIL = cropLineBelow(imgPIL, countPx=128)
     img_np = np.array(imgPIL)
     img_height, img_width = img_np.shape[:2]
@@ -120,3 +119,4 @@ def makePatches(imgPIL, img_name, patch_size=(512, 512), stride=(128, 128)):
             patch_id += 1
             
     return patch_list, coords
+
