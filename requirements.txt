@@ -1,0 +1,15 @@
+streamlit
+Pillow
+numpy
+torchvision
+torch-utils
+albumentations
+opencv-python
+matplotlib
+cellpose
+scikit-image
+scikit-learn
+gradio_client
+glob2
+segmentation-models-pytorch
+stqdm

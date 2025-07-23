@@ -1,5 +1,6 @@
+# -*- coding: cp1251 -*-
 # === GENERAL VARIABLES ===
-CHECKPOINTPATH = "final_model_epoch_350.pth"
+CHECKPOINTPATH = "allSEMchkpt350.pth"
 PATTERN = r'\.(\d+)_(\d+)\.png$'
 
 # === LIBRARIES GENERAL ===
@@ -8,6 +9,7 @@ import torch
 
 import streamlit as st
 import numpy as np
+from stqdm import stqdm
 
 from skimage import measure
 from skimage.measure import label, regionprops
@@ -15,30 +17,27 @@ from PIL import Image, ImageFont, ImageDraw
 from torch.utils.data import DataLoader
 
 # === PROJECT SCRIPTS ===
-from processingFunctions import makePatches, cropLineBelow, TestDataset
+from processingFunctions import makePatches, TestDataset
 from processingFunctions import buildModel, loadCheckpoint, loadCellposeModel
-
 
 # === SECONDARY FUNCTIONS ===
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
+
 # === PROCESSING BLOCK ===
-# _img передавать как np.array иначе PIL не кэшится
 @st.cache_data(show_spinner = False)
-def segmentationImage(_img, imgName,
-                      cellposeParams):
-    width, height = _img.size
+def detectBiofilm(imgNP, imgSize, threshold = 0.5):
+    width, height = imgSize
     imgPatches = []
     patchesInfo = []
-    print(f"[INFO] START PROCESSING {imgName}...")
-        
-    if ((height > 512) or (width > 512)):
-        imgPatches, patchesInfo = makePatches(_img, 
+    print(f"[INFO] START UNET++ PROCESSING...")
+    if ((height > 512) and (width > 512)):
+        imgPatches, patchesInfo = makePatches(imgNP, 
                                               patch_size = (512, 512),
-                                              stride=(384,384))
+                                              stride = (256, 256))
     else:
-        imgPatches.append(_img)
+        imgPatches.append(imgNP)
         patchesInfo.append((0, 0, 0))
             
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -46,7 +45,7 @@ def segmentationImage(_img, imgName,
         
     test_dataset = TestDataset(imgPatches, patchesInfo)
     test_loader = DataLoader(test_dataset,
-                                batch_size=1,
+                                batch_size=2,
                                 shuffle=False)
 
     model = buildModel().to(device)   
@@ -57,9 +56,8 @@ def segmentationImage(_img, imgName,
     biofilmProbs = np.zeros((height, width), dtype=float)
     biofilmPredictions = np.zeros((height, width), dtype=float)
     
-    #probsCount = np.load("src/probsCount.npy")
     with torch.no_grad():
-        for (images, patchesInfo) in test_loader:
+        for (images, patchesInfo) in stqdm(test_loader):
             images = images.to(device)
             outputs = model(images)
             outputs = outputs.cpu()
@@ -74,11 +72,12 @@ def segmentationImage(_img, imgName,
                 probsCount[y:y+512, x:x+512] += 1
                 print(f'---> {patchesInfo[2].item()} <---')
  
-    threshold = 0.5
     biofilmProbs = biofilmProbs / probsCount 
     biofilmPredictions = (biofilmProbs > threshold).astype(np.uint8) 
-    
-    origImgNP = np.array(_img) 
+    return biofilmPredictions
+
+@st.cache_data(show_spinner=False)
+def detectSingleBacteries(origImgNP, biofilmPredictions, cellposeParams):
     cleaned_image = origImgNP.copy()
     cleaned_image[biofilmPredictions == 1] = 0 #black 
         
@@ -88,15 +87,7 @@ def segmentationImage(_img, imgName,
                                                      channels=[0, 0], 
                                                      flow_threshold=cellposeParams[0], 
                                                      cellprob_threshold=cellposeParams[1])
-    #singlePredictions = np.array(singlePredictions != 0, dtype=np.uint8)
-
-    predictedLabels = {
-    "single": singlePredictions,
-    "bf": biofilmPredictions
-    }
-        
-    print(f"PROCESSED SUCCESSFULLY!")
-    return predictedLabels
+    return singlePredictions
 
 @st.cache_data(show_spinner=False)    
 def drawPicture(_origImg, predictedLabels):
@@ -138,12 +129,12 @@ def calculateStatistics(predictedLabels, scale = 0.05):
     
     labeled_bacteria = measure.label(singlePredictions)
     bacteria_count = labeled_bacteria.max()
-    
+
     resultInfo = {
     "biofilm_area": int(np.sum(biofilm_mask)),
-    "biofilm_mkm_area": int(np.sum(biofilm_mask)) * scale,
+    "biofilm_mkm_area": int(np.sum(biofilm_mask)) * (scale**2),
     "bacteria_count": int(bacteria_count),
-    "bacteries_mkm_area": int(np.sum(bacteria_mask)) * scale
+    "bacteries_mkm_area": int(np.sum(bacteria_mask)) * (scale**2)
     }
     
     return resultInfo

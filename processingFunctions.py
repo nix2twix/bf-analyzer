@@ -20,6 +20,9 @@ import numpy as np
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
+# === GLOBAL VARIABLES ===
+MINIMAGESIZE = 512
+
 class TestDataset(Dataset):
     def __init__(self, pil_images, imagesInfo, augmentation=False):
         self.imgPatches = pil_images
@@ -93,13 +96,14 @@ def buildModel(encoderName = 'resnet34', encoderWeights = 'imagenet', activation
 
 def cropLineBelow(imgPIL, countPx=120):
     width, height = imgPIL.size
-    cropped_img = imgPIL.crop((0, 0, width, height - countPx))
-    return cropped_img
+    if (width >= MINIMAGESIZE + countPx) and (height >= MINIMAGESIZE + countPx):
+        cropped_img = imgPIL.crop((0, 0, width, height - countPx))
+        return cropped_img
+    else:
+        return imgPIL
 
-def makePatches(imgPIL, patch_size=(512, 512), stride=(128, 128)):   
-    imgPIL = cropLineBelow(imgPIL, countPx=128)
-    img_np = np.array(imgPIL)
-    img_height, img_width = img_np.shape[:2]
+def makePatches(imgNP, patch_size=(512, 512), stride=(128, 128)):   
+    img_height, img_width = imgNP.shape[:2]
 
     patch_h, patch_w = patch_size
     stride_y, stride_x = stride
@@ -113,7 +117,7 @@ def makePatches(imgPIL, patch_size=(512, 512), stride=(128, 128)):
 
     for y in y_coords:
         for x in x_coords:
-            patch = imgPIL.crop((x, y, x + patch_w, y + patch_h))
+            patch = imgNP.crop((x, y, x + patch_w, y + patch_h))
             patch_list.append(patch)
             coords.append((x, y, patch_id))
             patch_id += 1

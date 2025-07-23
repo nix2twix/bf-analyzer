@@ -1,10 +1,11 @@
 ﻿# === LIBRARIES GENERAL ===
+from cv2 import threshold
 import streamlit as st
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 # === PROJECT SCRIPTS ===
-from processHandler import calculateStatistics, segmentationImage
+from processHandler import calculateStatistics, detectBiofilm, detectSingleBacteries
 from processHandler import filtrationObjects, drawPicture, makeBacteriaInfo
 from processingFunctions import cropLineBelow
 from styles import loadStyles
@@ -13,10 +14,11 @@ def loadDefaultSession():
         # IMAGE    
         st.session_state.imageName = None
         st.session_state.uploadedImage = None
+        
         st.session_state.predictedLabels = None
         st.session_state.filteredLabels = None
         
-       # st.session_state.singleBactProperties = None
+        st.session_state.statisticsInfo = None
                 
         st.session_state.imgWidth = 0
         st.session_state.imgHeight = 0
@@ -35,7 +37,7 @@ def loadDefaultSession():
         }
         
         # SESSION
-        st.session_state.showNumbers = True
+        st.session_state.showNumbers = False
            
 
 # === PAGE CONFIGURATION ===
@@ -58,8 +60,8 @@ with st.container():
     with col2:
         st.markdown("### ℹ️ Info")
         st.markdown("""
-            This tool is designed for processing SEM images of biofilms. The supported image format is .bmp, .png, and .jpg. 
-            Set the analysis parameters on the left, upload the image, and get the processing result.
+            This tool is designed for processing SEM images of biofilms.  
+                Set the analysis parameters on the left, upload the image, and get the processing result.
         """)
 
 st.markdown('<hr style="margin: 0.5rem 0;">', unsafe_allow_html=True)
@@ -83,28 +85,43 @@ with blockTools:
         st.session_state.uploadedImage = Image.open(uploadedFile)       
 
     # --- Инструменты ---
-    seg_button_clicked = st.button("🧪 Start segmentation", disabled = st.session_state.uploadedImage is None)
+    seg_button_clicked = st.button("🧪 Start segmentation",disabled = st.session_state.uploadedImage is None, use_container_width=True)
     #st.button("🔍 Zoom (see later)")
     #st.button("💾 Save results (see later)")
-    st.session_state.showNumbers = st.toggle("Show bacteries numbers")
+    st.session_state.showNumbers = st.toggle("Show bacteries numbers", disabled = True)
     
     if seg_button_clicked:
         with st.spinner("⏳ Image processing..."):
             
             tempCropedImage = st.session_state.uploadedImage
-            if (st.session_state.imgHeight > 512):
-                tempCropedImage = cropLineBelow(tempCropedImage, 120)    
+            tempCropedImage = cropLineBelow(tempCropedImage, 120)    
             
             st.session_state.imgWidth, st.session_state.imgHeight = tempCropedImage.size
             
-            cellposeParams = [0.4, 0.0]        #0.4, 0    
-            st.session_state.predictedLabels = segmentationImage(tempCropedImage,
-                                        st.session_state.imageName,
-                                        cellposeParams)
+            # PREDICTION CLASS: BIOFILM
+            biofilmPredictions = detectBiofilm(
+                np.asarray(tempCropedImage),
+                tempCropedImage.size,
+                threshold = 0.5
+            )
+            # PREDICTION CLASS: SINGLE
+            singlePredictions = detectSingleBacteries(
+                np.asarray(tempCropedImage),
+                biofilmPredictions,
+                cellposeParams = [0.4, 0.0]
+            )
             
+            st.session_state.predictedLabels = {
+                "bf": biofilmPredictions,
+                "single": singlePredictions
+            }
+            # посчитать статистики! и объекты
+            st.session_state.statisticsInfo = calculateStatistics(st.session_state.predictedLabels, 
+                                                    scale = 0.05)
             
-            st.write("📤 Processing finished")
-            print("[INFO] Processed finished successfully!")
+            if (st.session_state.filteredLabels is not None):
+                st.write("📤 Processing finished") 
+                print("[INFO] Processed finished successfully!")
 
 # === Левая панель: Settings ===
 with blockSettings:
@@ -126,7 +143,7 @@ with blockSettings:
         max_value=1.0,
         value=st.session_state.singleBacteriesMinEcc, 
         key="singleBacteriesMinEcc",
-        help="An eccentricity equal to zero corresponds to a perfect circle, and equal to 1 corresponds to a parabola",
+        help="An eccentricity equal to zero corresponds to a perfect circle, and equal to one corresponds to a ellipse",
         disabled=st.session_state.predictedLabels is None
         )
     
@@ -152,24 +169,22 @@ with blockSettings:
     # Фильтрация результатов обработки
     if (st.session_state.predictedLabels is not None):
         
-        # функция кот. формирует объекты
         st.session_state.filteredLabels = filtrationObjects(st.session_state.uploadedImage,
                                         st.session_state.predictedLabels,
                                         st.session_state.filtrationParams)
-        
-        resultInfo = calculateStatistics(st.session_state.filteredLabels, 
-                                                          scale = 0.05)
-        
+        # фильтрация посчитанных статистик из st.session_state.statisticsInfo
+        # filtered labels должна вернуть номера отфильтрованных оставшихся меток, по ним считать статистику
+
+        #типо сумма масок по номерам
         biofilmArea = resultInfo["biofilm_mkm_area"]
         bacteriesCount = resultInfo["bacteria_count"]
         bacteriesArea = resultInfo["bacteries_mkm_area"]
         imgArea = st.session_state.imgWidth * st.session_state.imgHeight * (0.05**2) #scale square
         
         st.markdown("### 📊 Statistics")
-        st.markdown(f"Biofilm area: {biofilmArea:.4g} μm<sup>2</sup> ({(biofilmArea / imgArea):.4f}%)", unsafe_allow_html=True)
         st.markdown(f"Single bacterias count: {bacteriesCount}")
-        st.markdown(f"Single bacterias area: {(bacteriesArea):.4g} μm<sup>2</sup> ({(bacteriesArea / imgArea):.4f}%)", unsafe_allow_html=True)
- 
+        st.markdown(f"Single bacterias area: {(bacteriesArea):.1f} μm<sup>2</sup> ({(100*bacteriesArea / imgArea):.1f}%)", unsafe_allow_html=True)
+        st.markdown(f"Biofilm area: {biofilmArea:.1f} μm<sup>2</sup> ({(100*biofilmArea / imgArea):.1f}%)", unsafe_allow_html=True)
         
 # === Центральная панель: Workflow ===
 with blockWorkspace:
@@ -184,7 +199,8 @@ with blockWorkspace:
                      use_container_width=True)
             
         else:
-            processedImage = drawPicture(st.session_state.uploadedImage, 
+            cropedOrigImage = cropLineBelow(st.session_state.uploadedImage, 120)    
+            processedImage = drawPicture(cropedOrigImage, 
                 st.session_state.filteredLabels)
 
             if st.session_state.showNumbers:
@@ -197,7 +213,7 @@ with blockWorkspace:
                     draw.text((y, x),
                               text = str(bacteria["maskNum"]),
                               fill = (255, 255, 255),
-                              font = ImageFont.load_default(size = 15)
+                              font = ImageFont.load_default(size = 30)
                               )
             st.image(image = processedImage, 
                          caption = f"Processing {st.session_state.imageName} result", 

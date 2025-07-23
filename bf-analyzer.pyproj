@@ -30,7 +30,6 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include=".streamlit\config.toml" />
-    <Content Include="final_model_epoch_350.pth" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include=".streamlit\" />
