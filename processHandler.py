@@ -26,7 +26,7 @@ def sigmoid(x):
 
 
 # === PROCESSING BLOCK ===
-@st.cache_data(show_spinner = False)
+@st.cache_data(show_spinner = False, max_entries=3)
 def detectBiofilm(imgNP, imgSize, threshold = 0.5):
     width, height = imgSize
     imgPatches = []
@@ -76,7 +76,7 @@ def detectBiofilm(imgNP, imgSize, threshold = 0.5):
     biofilmPredictions = (biofilmProbs > threshold).astype(np.uint8) 
     return biofilmPredictions
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner = False, max_entries=3)
 def detectSingleBacteries(origImgNP, biofilmPredictions, cellposeParams):
     cleaned_image = origImgNP.copy()
     cleaned_image[biofilmPredictions == 1] = 0 #black 
@@ -89,7 +89,7 @@ def detectSingleBacteries(origImgNP, biofilmPredictions, cellposeParams):
                                                      cellprob_threshold=cellposeParams[1])
     return singlePredictions
 
-@st.cache_data(show_spinner=False)    
+@st.cache_data(show_spinner = False, max_entries=3)    
 def drawPicture(_origImg, predictedLabels):
     _origImg = _origImg.convert("RGBA") 
 
@@ -161,8 +161,9 @@ def makeBacteriaInfo(predictedLabels):
     return singleBacteriesInfo
 
 def filtrationObjects(origImg,
-               predictedLabels, 
-               params):
+            predictedLabels, 
+            bacteriaInfo,
+            params):
         
     width, height = origImg.size
     imgSize = width * height
@@ -170,7 +171,8 @@ def filtrationObjects(origImg,
     singlePredictions = predictedLabels["single"] 
     bfPredictions = predictedLabels["bf"]
     
-    singleInfo = makeBacteriaInfo(predictedLabels)
+    #это надо считать один раз!
+    singleInfo = bacteriaInfo
     
     # SINGLE BACTERIES FILTRATION    
     filteredSingleMasks = singlePredictions.copy()

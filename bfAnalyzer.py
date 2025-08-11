@@ -1,5 +1,4 @@
 ﻿# === LIBRARIES GENERAL ===
-from cv2 import threshold
 import streamlit as st
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -19,7 +18,8 @@ def loadDefaultSession():
         st.session_state.filteredLabels = None
         
         st.session_state.statisticsInfo = None
-                
+        st.session_state.singleInfo = None
+        
         st.session_state.imgWidth = 0
         st.session_state.imgHeight = 0
         
@@ -110,11 +110,11 @@ with blockTools:
                 biofilmPredictions,
                 cellposeParams = [0.4, 0.0]
             )
-            
             st.session_state.predictedLabels = {
                 "bf": biofilmPredictions,
                 "single": singlePredictions
             }
+            st.session_state.singleInfo = makeBacteriaInfo(predictedLabels)
             # посчитать статистики! и объекты
             st.session_state.statisticsInfo = calculateStatistics(st.session_state.predictedLabels, 
                                                     scale = 0.05)
