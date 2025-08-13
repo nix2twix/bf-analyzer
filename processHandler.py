@@ -20,24 +20,26 @@ from torch.utils.data import DataLoader
 from processingFunctions import makePatches, TestDataset
 from processingFunctions import buildModel, loadCheckpoint, loadCellposeModel
 
+
 # === SECONDARY FUNCTIONS ===
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-
 # === PROCESSING BLOCK ===
-@st.cache_data(show_spinner = False, max_entries=3)
-def detectBiofilm(imgNP, imgSize, threshold = 0.5):
-    width, height = imgSize
+@st.cache_data(show_spinner=False, max_entries = 3)    
+def segmentationImage(_img, imgName,
+                      cellposeParams):
+    width, height = _img.size
     imgPatches = []
     patchesInfo = []
-    print(f"[INFO] START UNET++ PROCESSING...")
+    print(f"[INFO] START PROCESSING {imgName}...")
+        
     if ((height > 512) and (width > 512)):
-        imgPatches, patchesInfo = makePatches(imgNP, 
+        imgPatches, patchesInfo = makePatches(_img, 
                                               patch_size = (512, 512),
                                               stride = (256, 256))
     else:
-        imgPatches.append(imgNP)
+        imgPatches.append(_img)
         patchesInfo.append((0, 0, 0))
             
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -45,7 +47,7 @@ def detectBiofilm(imgNP, imgSize, threshold = 0.5):
         
     test_dataset = TestDataset(imgPatches, patchesInfo)
     test_loader = DataLoader(test_dataset,
-                                batch_size=2,
+                                batch_size=1,
                                 shuffle=False)
 
     model = buildModel().to(device)   
@@ -56,6 +58,7 @@ def detectBiofilm(imgNP, imgSize, threshold = 0.5):
     biofilmProbs = np.zeros((height, width), dtype=float)
     biofilmPredictions = np.zeros((height, width), dtype=float)
     
+    #probsCount = np.load("src/probsCount.npy")
     with torch.no_grad():
         for (images, patchesInfo) in stqdm(test_loader):
             images = images.to(device)
@@ -72,12 +75,11 @@ def detectBiofilm(imgNP, imgSize, threshold = 0.5):
                 probsCount[y:y+512, x:x+512] += 1
                 print(f'---> {patchesInfo[2].item()} <---')
  
+    threshold = 0.5
     biofilmProbs = biofilmProbs / probsCount 
     biofilmPredictions = (biofilmProbs > threshold).astype(np.uint8) 
-    return biofilmPredictions
-
-@st.cache_data(show_spinner = False, max_entries=3)
-def detectSingleBacteries(origImgNP, biofilmPredictions, cellposeParams):
+    
+    origImgNP = np.array(_img) 
     cleaned_image = origImgNP.copy()
     cleaned_image[biofilmPredictions == 1] = 0 #black 
         
@@ -87,9 +89,17 @@ def detectSingleBacteries(origImgNP, biofilmPredictions, cellposeParams):
                                                      channels=[0, 0], 
                                                      flow_threshold=cellposeParams[0], 
                                                      cellprob_threshold=cellposeParams[1])
-    return singlePredictions
+    #singlePredictions = np.zeros_like(biofilmPredictions)
 
-@st.cache_data(show_spinner = False, max_entries=3)    
+    predictedLabels = {
+    "single": singlePredictions,
+    "bf": biofilmPredictions
+    }
+        
+    print(f"PROCESSED SUCCESSFULLY!")
+    return predictedLabels
+
+@st.cache_data(show_spinner=False, max_entries = 3)    
 def drawPicture(_origImg, predictedLabels):
     _origImg = _origImg.convert("RGBA") 
 
@@ -119,7 +129,7 @@ def drawPicture(_origImg, predictedLabels):
    
     return composite
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(show_spinner=False, max_entries = 3)    
 def calculateStatistics(predictedLabels, scale = 0.05):
     biofilmPredictions = predictedLabels["bf"]
     singlePredictions = predictedLabels["single"]    
@@ -129,7 +139,7 @@ def calculateStatistics(predictedLabels, scale = 0.05):
     
     labeled_bacteria = measure.label(singlePredictions)
     bacteria_count = labeled_bacteria.max()
-
+    
     resultInfo = {
     "biofilm_area": int(np.sum(biofilm_mask)),
     "biofilm_mkm_area": int(np.sum(biofilm_mask)) * (scale**2),
@@ -161,9 +171,8 @@ def makeBacteriaInfo(predictedLabels):
     return singleBacteriesInfo
 
 def filtrationObjects(origImg,
-            predictedLabels, 
-            bacteriaInfo,
-            params):
+               predictedLabels, 
+               params):
         
     width, height = origImg.size
     imgSize = width * height
@@ -171,8 +180,7 @@ def filtrationObjects(origImg,
     singlePredictions = predictedLabels["single"] 
     bfPredictions = predictedLabels["bf"]
     
-    #это надо считать один раз!
-    singleInfo = bacteriaInfo
+    singleInfo = makeBacteriaInfo(predictedLabels)
     
     # SINGLE BACTERIES FILTRATION    
     filteredSingleMasks = singlePredictions.copy()
@@ -229,7 +237,4 @@ if __name__ == "__main__":
         
         result = drawPicture(uploaded_file, filterLabels)
         result.show()
-    
-    
-    
     
