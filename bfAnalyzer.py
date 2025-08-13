@@ -40,7 +40,7 @@ def loadDefaultSession():
     
     st.session_state.imgWidth = 0
     st.session_state.imgHeight = 0
-    st.session_state.imgScale = 0.05
+    st.session_state.imgScale = None
     st.session_state.scaleMkm = 50
     st.session_state.infoLineHeight = 120
     
@@ -97,32 +97,38 @@ with blockTools:
             st.session_state.imageName = uploadedFile.name
             st.session_state.uploadedImage = Image.open(uploadedFile)
             st.session_state.imgWidth, st.session_state.imgHeight = st.session_state.uploadedImage.size
-            
-        tempArrImg = np.array(st.session_state.uploadedImage, dtype='uint8')
-
-        autoScale, scaleData = estimateScale(tempArrImg)
-        autoScaleText = scaleData[4] if scaleData else None
-        infoLineHeight = st.session_state.imgHeight - scaleData[0] if scaleData else None
-        
-        st.session_state.imgScale = autoScale
-        st.session_state.infoLineHeight = infoLineHeight
-        st.session_state.scaleMkm = autoScaleText
 
         manualScaleEnabled = st.toggle(
-            "Enter the scale manually", value=False
+            "Enter the scale manually", 
+            value=False,
+            disabled=st.session_state.uploadedImage is None
         )
-        if manualScaleEnabled:
-            manualScaleValue = st.number_input(
-                "Enter the scale (μm/px):",
-                min_value=0.001,
-                max_value=1000.0,
-                value=float(autoScale) if autoScale else 1.0,
-                step=0.01,
-                format="%.3f"
-            )
-            st.session_state.imgScale = manualScaleValue
-        else:
+        
+        if uploadedFile is not None:  
+            tempArrImg = np.array(st.session_state.uploadedImage, dtype='uint8')
+
+            autoScale, scaleData = estimateScale(tempArrImg)
+            autoScaleText = scaleData[4] if scaleData else None
+            infoLineHeight = st.session_state.imgHeight - scaleData[0] if scaleData else None
+        
             st.session_state.imgScale = autoScale
+            st.session_state.infoLineHeight = infoLineHeight
+            st.session_state.scaleMkm = autoScaleText
+        
+            if manualScaleEnabled:
+                manualScaleValue = st.number_input(
+                    "Enter the scale μm:",
+                    min_value=0.001,
+                    max_value=1000.0,
+                    value=float(autoScale) if autoScale else 1.0,
+                    step=0.1,
+                    format="%.3f"
+                )
+                st.session_state.imgScale = manualScaleValue / 1000
+                st.session_state.scaleMkm = manualScaleValue
+            else:
+                st.session_state.imgScale = autoScale
+                st.session_state.scaleMkm = autoScaleText
             
         segButtonClicked = st.button(
             "🧪 Start segmentation", 
@@ -292,9 +298,7 @@ with blockWorkspace:
     with workFlowCol:
         st.markdown("### 🔬 Workflow")  
     with scaleCol:
-        scaleInfoText = f"""
-        ### 🔎 Scale: {st.session_state.scaleMkm:.1f} μ/px  
-        """
+        scaleInfoText = f"### 🔎 Scale: {st.session_state.scaleMkm:.1f} μ/px"
         st.markdown(scaleInfoText)
     if st.session_state.uploadedImage is not None:
         if st.session_state.filteredLabels is None:
