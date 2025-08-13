@@ -4,7 +4,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>ce49cf83-dbe2-479f-b0f8-76dc3c6c6c8c</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>processHandler.py</StartupFile>
+    <StartupFile>autoScale.py</StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -23,9 +23,11 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="autoScale.py" />
     <Compile Include="bfAnalyzer.py" />
     <Compile Include="processHandler.py" />
     <Compile Include="processingFunctions.py" />
+    <Compile Include="resultsHandler.py" />
     <Compile Include="styles.py" />
   </ItemGroup>
   <ItemGroup>

@@ -114,7 +114,10 @@ def makePatches(imgPIL, patch_size=(512, 512), stride=(128, 128)):
     coords = []
 
     x_coords = list(range(0, img_width - patch_w + 1, stride_x))
+    x_coords.append(img_width - patch_w)
+
     y_coords = list(range(0, img_height - patch_h + 1, stride_y))
+    y_coords.append(img_height - patch_h)
 
     for y in y_coords:
         for x in x_coords:
