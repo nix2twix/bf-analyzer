@@ -1,4 +1,4 @@
-﻿# === LIBRARIES GENERAL ===
+# === LIBRARIES GENERAL ===
 import cv2
 import torch
 
@@ -102,8 +102,9 @@ def cropLineBelow(imgPIL, countPx=120):
     else:
         return imgPIL
 
-def makePatches(imgNP, patch_size=(512, 512), stride=(128, 128)):   
-    img_height, img_width = imgNP.shape[:2]
+def makePatches(imgPIL, patch_size=(512, 512), stride=(128, 128)):   
+    img_np = np.array(imgPIL)
+    img_height, img_width = img_np.shape[:2]
 
     patch_h, patch_w = patch_size
     stride_y, stride_x = stride
@@ -117,10 +118,9 @@ def makePatches(imgNP, patch_size=(512, 512), stride=(128, 128)):
 
     for y in y_coords:
         for x in x_coords:
-            patch = imgNP.crop((x, y, x + patch_w, y + patch_h))
+            patch = imgPIL.crop((x, y, x + patch_w, y + patch_h))
             patch_list.append(patch)
             coords.append((x, y, patch_id))
             patch_id += 1
             
     return patch_list, coords
-
