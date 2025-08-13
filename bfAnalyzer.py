@@ -30,6 +30,7 @@ def loadDefaultSession():
     st.session_state.predictedLabels = None
     st.session_state.filteredLabels = None
     
+    st.session_state.objectsInfo = None
     st.session_state.bacteriaInfo = None
     st.session_state.singleMinArea = 0
     st.session_state.singleMaxArea = 10000    
@@ -168,7 +169,7 @@ with blockTools:
                 if labeledMasks is not None:
                     st.session_state.predictedLabels = labeledMasks
                         
-            if st.session_state.predictedLabels is not None:
+            if st.session_state.predictedLabels is not None and st.session_state.objectsInfo is None:
                 st.session_state.objectsInfo = prepareObjectInfo(st.session_state.predictedLabels)
                 
                 st.session_state.bacteriaInfo = st.session_state.objectsInfo[0]
