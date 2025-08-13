@@ -105,14 +105,13 @@ def segmentationImage(
     singlePredictions = np.zeros_like(biofilmPredictions)
        
     print(f"[INFO] START CELLPOSE-SAM PROCESSING...")
-    '''
+
     model_cp = loadCellposeModel() 
     singlePredictions, flows, styles = model_cp.eval(cleaned_image, 
                                                      channels=[0, 0], 
                                                      flow_threshold=cellposeParams[0], 
                                                      cellprob_threshold=cellposeParams[1])
     
-    '''
 
     predictedLabels = {
     "single": singlePredictions,
@@ -198,8 +197,7 @@ def makeBacteriaInfo(predictedLabels):
         min_area, max_area = 0, 10000
         
     return singleBacteriesInfo, min_area, max_area
-
-@st.cache_data(show_spinner=False, ttl=6000, max_entries = 10)  
+ 
 def prepareObjectInfo(predictedLabels):
     bacteriaInfo, minSingleArea, maxSingleArea = makeBacteriaInfo(predictedLabels)
 

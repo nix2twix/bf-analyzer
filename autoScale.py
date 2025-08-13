@@ -6,10 +6,6 @@ import re
 
 import streamlit as st
 
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-
 def normalizeScaleBar(c_fullImage, lowerBound = None, bright_threshold=230):
     if lowerBound is None:
         return c_fullImage  
@@ -66,16 +62,27 @@ def increase(c_text):
 
 def scale(c_text):
     try:
-        matchesScale = re.findall(r"[0-9]*\.?[0-9]+[nup]m", c_text)[0]
-        if matchesScale[-2] == 'n':
-            _scale = float(matchesScale[:-2]) / 1000
-        elif matchesScale[-2] == 'u' or matchesScale[-2] == 'p':
-            _scale = float(matchesScale[:-2]) 
+        matchesScale = re.findall(r"[0-9]*\.?[0-9]+[a-zA-Z]*m", c_text)
+        if not matchesScale:
+            return None, None
+
+        scale_str = matchesScale[0]
+        value = float(re.findall(r"[0-9]*\.?[0-9]+", scale_str)[0])
+
+        if 'n' in scale_str:
+            _scale = value / 1000
+            
+        elif 'u' in scale_str or 'p' in scale_str:
+            _scale = value
+        else:
+            _scale = value 
+            
     except Exception:
         _scale = None
-        matchesScale = None
+        scale_str = None
 
-    return _scale, matchesScale
+    return _scale, scale_str
+
 
 @st.cache_data(show_spinner = False)
 def estimateScale(c_image):
@@ -94,13 +101,13 @@ def estimateScale(c_image):
         if (scaleVal is not None) and (scaleLengthVal is not None):
             print(f"mkm / pixel: {scaleVal} / {scaleLengthVal} = {scaleVal / scaleLengthVal}")
             print(f"pixel / mkm: {scaleLengthVal} / {scaleVal} = {scaleLengthVal / scaleVal}")
-            return scaleVal / scaleLengthVal, [lowerBound, startPixelScale, scaleLengthVal, scaleText]
+            return scaleVal / scaleLengthVal, [lowerBound, startPixelScale, scaleLengthVal, scaleText, scaleVal]
         
     return None, None
 
 if __name__ == "__main__":    
 
-    img_path = r"C:\Users\Victory\YandexDisk\WORK\BIOFILMS\оригиналы снимков\6(x500)_1908.bmp"
+    img_path = r"C:\Users\Victory\YandexDisk\WORK\BIOFILMS\data\scale-1k\22-BSE-1k-T1.bmp"
 
 
     img = Image.open(img_path).convert('L')

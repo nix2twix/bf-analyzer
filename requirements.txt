@@ -13,3 +13,4 @@ gradio_client
 glob2
 segmentation-models-pytorch
 stqdm
+easyocr

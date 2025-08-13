@@ -1,6 +1,4 @@
 ﻿# === LIBRARIES GENERAL ===
-import zipfile
-
 import streamlit as st
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -43,6 +41,7 @@ def loadDefaultSession():
     st.session_state.imgWidth = 0
     st.session_state.imgHeight = 0
     st.session_state.imgScale = 0.05
+    st.session_state.scaleMkm = 50
     st.session_state.infoLineHeight = 120
     
     # FILTRATION SETTINGS
@@ -99,18 +98,37 @@ with blockTools:
             st.session_state.uploadedImage = Image.open(uploadedFile)
             st.session_state.imgWidth, st.session_state.imgHeight = st.session_state.uploadedImage.size
             
-            tempArrImg = np.array(st.session_state.uploadedImage, dtype = 'uint8')
+        tempArrImg = np.array(st.session_state.uploadedImage, dtype='uint8')
 
-            st.session_state.imgScale, scaleData = estimateScale(tempArrImg)
-            print(f"imgScale = {st.session_state.imgScale}")
-            st.session_state.infoLineHeight = st.session_state.imgHeight - scaleData[0]      
-            print(f"infoLineHeight = {st.session_state.infoLineHeight}")
+        autoScale, scaleData = estimateScale(tempArrImg)
+        autoScaleText = scaleData[4] if scaleData else None
+        infoLineHeight = st.session_state.imgHeight - scaleData[0] if scaleData else None
+        
+        st.session_state.imgScale = autoScale
+        st.session_state.infoLineHeight = infoLineHeight
+        st.session_state.scaleMkm = autoScaleText
+
+        manualScaleEnabled = st.toggle(
+            "Enter the scale manually", value=False
+        )
+        if manualScaleEnabled:
+            manualScaleValue = st.number_input(
+                "Enter the scale (μm/px):",
+                min_value=0.001,
+                max_value=1000.0,
+                value=float(autoScale) if autoScale else 1.0,
+                step=0.01,
+                format="%.3f"
+            )
+            st.session_state.imgScale = manualScaleValue
+        else:
+            st.session_state.imgScale = autoScale
             
         segButtonClicked = st.button(
             "🧪 Start segmentation", 
             disabled=st.session_state.uploadedImage is None,
-            use_container_width=True)
-
+            use_container_width=True)     
+        
         if segButtonClicked:
             with st.spinner("⏳ Image processing..."):
            
@@ -145,15 +163,15 @@ with blockTools:
                     st.session_state.predictedLabels = labeledMasks
                         
             if st.session_state.predictedLabels is not None:
-                objectsInfo = prepareObjectInfo(st.session_state.predictedLabels)
+                st.session_state.objectsInfo = prepareObjectInfo(st.session_state.predictedLabels)
                 
-                st.session_state.bacteriaInfo = objectsInfo[0]
-                st.session_state.singleMinArea = objectsInfo[1]
-                st.session_state.singleMaxArea = objectsInfo[2]
+                st.session_state.bacteriaInfo = st.session_state.objectsInfo[0]
+                st.session_state.singleMinArea = st.session_state.objectsInfo[1]
+                st.session_state.singleMaxArea = st.session_state.objectsInfo[2]
                 
-                st.session_state.biofilmRegions = objectsInfo[3]
-                st.session_state.biofilmMinArea = objectsInfo[4]
-                st.session_state.biofilmMaxArea = objectsInfo[5]
+                st.session_state.biofilmRegions = st.session_state.objectsInfo[3]
+                st.session_state.biofilmMinArea = st.session_state.objectsInfo[4]
+                st.session_state.biofilmMaxArea = st.session_state.objectsInfo[5]
                 
                 st.session_state.singleBacteriesAreaRange = (st.session_state.singleMinArea, st.session_state.singleMaxArea)
                 st.session_state.bfAreaRange = (st.session_state.biofilmMinArea, st.session_state.biofilmMaxArea)
@@ -270,7 +288,14 @@ with blockTools:
 
 # === Левая панель: Workflow ===
 with blockWorkspace:
-    st.markdown("### 🔬 Workflow")   
+    workFlowCol, scaleCol = st.columns([2.4, 1.6])
+    with workFlowCol:
+        st.markdown("### 🔬 Workflow")  
+    with scaleCol:
+        scaleInfoText = f"""
+        ### 🔎 Scale: {st.session_state.scaleMkm:.1f} μ/px  
+        """
+        st.markdown(scaleInfoText)
     if st.session_state.uploadedImage is not None:
         if st.session_state.filteredLabels is None:
             st.image(
@@ -279,6 +304,8 @@ with blockWorkspace:
                 use_container_width=True)
         else:
             processedImage = drawPicture(uploadedFile, st.session_state.filteredLabels)
+
+            
 
             if st.session_state.showNumbers:
                 draw = ImageDraw.Draw(processedImage)
@@ -291,10 +318,10 @@ with blockWorkspace:
     else:
         st.info("SEM-image was not uploaded.")
     
-helpTab =  st.expander("❓ Help", expanded=False)
-with helpTab:
-    st.markdown("If you have any problems, you can try to clear cash memory:")
-    st.markdown('<div style="margin-bottom: 1rem;"></div>', unsafe_allow_html=True)
-    if st.button("♻ Clear cache"):
-        st.cache_data.clear()
+    helpTab =  st.expander("❓ Help", expanded=False)
+    with helpTab:
+        st.markdown("If you have any problems, you can try to clear cash memory:")
+        st.markdown('<div style="margin-bottom: 1rem;"></div>', unsafe_allow_html=True)
+        if st.button("♻ Clear cache"):
+            st.cache_data.clear()
 
