@@ -1,6 +1,6 @@
 # -*- coding: cp1251 -*-
 # === GENERAL VARIABLES ===
-CHECKPOINTPATH = "allSEMchkpt350.pth"
+CHECKPOINTPATH = "1k2k-unet-model.pth"
 PATTERN = r'\.(\d+)_(\d+)\.png$'
 
 # === LIBRARIES GENERAL ===
@@ -46,31 +46,26 @@ def segmentationImage(
     INFLINEPX, 
     width, 
     height, 
-    imgName, 
-    cellposeParams = [0.4, 0.0]):
-    
+    imgName,
+    threshold=0.5
+):
     uploaded_file.seek(0)
     img_bytes = uploaded_file.read()
-    
     origImg = bytesToImg(img_bytes)
-    
-    cropedImg = cropLineBelow(origImg, INFLINEPX)
-    cropedImgWidth, cropedImgHeight = cropedImg.size
-    
-    imgPatches = []
-    patchesInfo = []
-    print(f"[INFO] START PROCESSING {imgName}...")
+
+    croppedImg = cropLineBelow(origImg, INFLINEPX)
+    croppedW, croppedH = croppedImg.size
 
     if height > 512 and width > 512:
         imgPatches, patchesInfo = makePatches(
-            cropedImg, patch_size=(512, 512), stride=(256, 256)
+            croppedImg, patch_size=(512, 512), stride=(256, 256)
         )
     else:
-        imgPatches.append(cropedImg)
-        patchesInfo.append((0, 0, 0))
+        imgPatches = [croppedImg]
+        patchesInfo = [(0, 0, 0)]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[INFO] DEVICE IS {device}!")
+    print(f"[INFO] DEVICE IS {device}")
 
     test_dataset = TestDataset(imgPatches, patchesInfo)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
@@ -79,184 +74,166 @@ def segmentationImage(
     loadCheckpoint(model, CHECKPOINTPATH)
     model.eval()
 
-    probsCount = np.zeros((cropedImgHeight, cropedImgWidth), dtype=float)
-    biofilmProbs = np.zeros((cropedImgHeight, cropedImgWidth), dtype=float)
+    classNames = ["bg", "biofilm", "intermediate", "single"]
+    modelClassNames = [name for name in classNames if name != "bg"]
+
+    probs = {name: np.zeros((croppedH, croppedW), dtype=np.float32) for name in modelClassNames}
+    count = np.zeros((croppedH, croppedW), dtype=np.float32)
 
     with torch.no_grad():
-        for (images, patchesInfo) in stqdm(test_loader):
+        for images, patch_info in stqdm(test_loader):
             images = images.to(device)
-            outputs = model(images).cpu()
+            outputs = torch.softmax(model(images), dim=1).cpu()
+
             for idx in range(images.size(0)):
-                x = patchesInfo[0].item()
-                y = patchesInfo[1].item()
-                output_np = outputs[idx].numpy()[1]
-                biofilmProbs[y:y+512, x:x+512] += output_np
-                probsCount[y:y+512, x:x+512] += 1
-                print(f'---> {patchesInfo[2].item()} <---')
+                x = patch_info[0].item()
+                y = patch_info[1].item()
 
-    threshold = 0.5
-    biofilmProbs = biofilmProbs / probsCount
-    biofilmPredictions = (biofilmProbs > threshold).astype(np.uint8)
+                for classIdx, name in enumerate(modelClassNames, start=1): 
+                    probs[name][y:y+512, x:x+512] += outputs[idx, classIdx].numpy()
+                count[y:y+512, x:x+512] += 1
 
-    origImgNP = np.array(cropedImg)
-    cleaned_image = origImgNP.copy()
-    cleaned_image[biofilmPredictions == 1] = 0
+    count += 1e-9
+    for name in probs:
+        probs[name] /= count
 
-    singlePredictions = np.zeros_like(biofilmPredictions)
-       
-    print(f"[INFO] START CELLPOSE-SAM PROCESSING...")
+    # ==== Выбор предсказанного класса ====
+    stackedProbs = np.stack([probs[name] for name in modelClassNames], axis=0) 
+    predMask = np.argmax(stackedProbs, axis=0) + 1  # т.к. "bg" — 0
+    predMask[np.max(stackedProbs, axis=0) <= threshold] = 0
 
-    model_cp = loadCellposeModel() 
-    singlePredictions, flows, styles = model_cp.eval(cleaned_image, 
-                                                     channels=[0, 0], 
-                                                     flow_threshold=cellposeParams[0], 
-                                                     cellprob_threshold=cellposeParams[1])
-    
+    # ==== Бинарные маски ====
+    predictedLabels = {}
+    for i, name in enumerate(modelClassNames, start=1):
+        binary_mask = (predMask == i).astype(np.uint8)
+        # Расширяем до исходного размера
+        mask_full = np.zeros((height, width), dtype=np.uint8)
+        mask_full[:croppedH, :croppedW] = binary_mask
+        predictedLabels[name] = mask_full
 
-    predictedLabels = {
-    "single": singlePredictions,
-    "bf": biofilmPredictions
-    }
-    
-    for key, mask in predictedLabels.items():
-        fullMask = np.zeros((height, width), dtype=mask.dtype)
-        fullMask[:cropedImgHeight, :cropedImgWidth] = mask
-        predictedLabels[key] = fullMask
-
-    print(f"PROCESSED SUCCESSFULLY!")
+    print(f"[INFO] PROCESSING {imgName} DONE!")
     return predictedLabels
 
 @st.cache_data(show_spinner=False, ttl=6000, max_entries=10)
-def drawPicture(uploaded_file: bytes, 
-                predictedLabels: dict) -> Image.Image:
-    
-    #st.image(predictedLabels["single"] * 255, caption="Single mask", clamp=True)
-    #st.image(predictedLabels["bf"] * 255, caption="Biofilm mask", clamp=True)
+def getPredictedObjects(predictedLabels):
+    predictedObjects = {}
+    for name, binary_mask in predictedLabels.items():
+        mask_uint8 = binary_mask.astype(np.uint8)
+        num_labels, labels = cv2.connectedComponents(mask_uint8, connectivity=8)
+        predictedObjects[name] = labels.astype(np.int32)
 
+        print(f"[INFO] Class '{name}': {num_labels - 1} objects found")
+
+    return predictedObjects
+
+@st.cache_data(show_spinner=False, ttl=6000, max_entries=10)
+def drawPicture(uploaded_file: bytes, objects, classColors, isShowIntermediate = False):
     uploaded_file.seek(0)
     origImgBytes = uploaded_file.read()
     origImg = bytesToImg(origImgBytes).convert("RGBA")
 
-    biofilmMask = (predictedLabels["bf"] == 1)
-    bacteriaMask = (predictedLabels["single"] != 0)
-
-    biofilmColor = np.array([36, 179, 83, 178], dtype=np.uint8)
-    bacteriaColor = np.array([184, 61, 245, 178], dtype=np.uint8)
-
     overlay = np.array(origImg.copy())
     overlay[:, :, 3] = 0
 
-    overlay[biofilmMask] = biofilmColor
-    overlay[bacteriaMask] = bacteriaColor
+    for className, mask in objects.items():
+        if className not in classColors:
+            continue
+        if className == "intermediate" and not isShowIntermediate:
+            color = classColors["biofilm"]  
+        else:
+            color = classColors[className]
 
-    overlayRGBA = Image.fromarray(overlay, mode="RGBA")
-    return Image.alpha_composite(origImg, overlayRGBA)
+        overlay[mask > 0] = color
+
+    return Image.alpha_composite(origImg, Image.fromarray(overlay, mode="RGBA"))
+
 
 
 @st.cache_data(show_spinner=False, ttl=6000, max_entries = 10)  
-def calculateStatistics(predictedLabels, scale=0.05):
-    biofilmMask = (predictedLabels["bf"] == 1)
-    bacteriaMask = (predictedLabels["single"] != 0)
+def calculateStatistics(objectsInfo, scale=0.05):
+    stats = {}
+    scale_factor = scale ** 2 
 
-    labeledBacteria = label(predictedLabels["single"])
-    bacteriaCount = labeledBacteria.max()
+    for className, objList in objectsInfo.items():
+        obj_count = len(objList)
+        total_area_px = sum(obj["area"] for obj in objList)
+        total_area_mkm = total_area_px * scale_factor
 
-    return {
-        "biofilm_area": int(np.sum(biofilmMask)),
-        "biofilm_mkm_area": int(np.sum(biofilmMask)) * (scale ** 2),
-        "bacteria_count": int(bacteriaCount),
-        "bacteries_mkm_area": int(np.sum(bacteriaMask)) * (scale ** 2)
-    }
+        stats[className] = {
+            "count": obj_count,
+            "total_area_px": total_area_px,
+            "total_area_mkm": total_area_mkm
+        }
+
+    return stats
 
 @st.cache_data(show_spinner=False, ttl=6000, max_entries = 10)    
-def makeBacteriaInfo(predictedLabels):
-    singlePredictions = predictedLabels["single"] 
-    singleBacteriesInfo = []
-    
-    for i in range(singlePredictions.min() + 1,  singlePredictions.max() + 1):
-        maskArray = np.zeros_like(singlePredictions)
-        maskArray[singlePredictions == i] = 1
-        maskLabel = label(maskArray)
-        if (maskLabel.any()):
-            properties = regionprops(maskLabel)[0]
-        
-            bacteriaInfo = {
-                            "maskNum": i,
-                            "maskArea": np.sum(maskArray),
-                            "maskEcc": properties.eccentricity,
-                            "centroidCoords": properties.centroid
-            }
-            singleBacteriesInfo.append(bacteriaInfo)
-            
-    if singleBacteriesInfo:
-        areas = [bacteria["maskArea"] for bacteria in singleBacteriesInfo]
-        min_area, max_area = int(min(areas)), int(max(areas))
-        if min_area == max_area:
-            min_area = 0
-    else:
-        min_area, max_area = 0, 10000
-        
-    return singleBacteriesInfo, min_area, max_area
- 
 def prepareObjectInfo(predictedLabels):
-    bacteriaInfo, minSingleArea, maxSingleArea = makeBacteriaInfo(predictedLabels)
+    objectsInfo = {}
+    areaStats = {}
 
-    bfPredictions = predictedLabels["bf"]
-    maskUint8 = (bfPredictions * 255).astype(np.uint8)
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-    closed = cv2.morphologyEx(maskUint8, cv2.MORPH_CLOSE, kernel)
-    labeledMask = label(closed > 0, connectivity=2)
-    biofilmRegions = list(regionprops(labeledMask))
+    for className, binaryMask in predictedLabels.items():
+        mask_uint8 = binaryMask.astype(np.uint8)
+        num_labels, labels = cv2.connectedComponents(mask_uint8, connectivity=8)
 
-    if biofilmRegions:
-        areas = [r.area for r in biofilmRegions]
-        minBfArea, maxBfArea = int(min(areas)), int(max(areas))
-        if minBfArea == maxBfArea:
-            minBfArea = 0
-    else:
-        minBfArea, maxBfArea = 0, 10000
+        class_objects = []
+        areas = []
 
-    return [bacteriaInfo, minSingleArea, maxSingleArea,
-            biofilmRegions, minBfArea, maxBfArea]
+        for obj_id in range(1, num_labels):  # 0 — фон
+            obj_mask = (labels == obj_id)
+            area = int(np.sum(obj_mask))
+            areas.append(area)
+
+            obj_info = {
+                "id": obj_id,
+                "area": area
+            }
+
+            if className == "single":
+                props = regionprops(obj_mask.astype(np.uint8))
+                if props:
+                    obj_info["eccentricity"] = float(props[0].eccentricity)
+                else:
+                    obj_info["eccentricity"] = None
+
+            class_objects.append(obj_info)
+
+        objectsInfo[className] = class_objects
+
+        areaStats[className] = {
+            "min_area": int(np.min(areas)) if areas else 0,
+            "max_area": int(np.max(areas)) if areas else 0
+        }
+
+    return objectsInfo, areaStats
 
 @st.cache_data(show_spinner=False, ttl=6000, max_entries = 10)  
-def filtrationObjects(bacteriaInfo, biofilmMask, params):
-    # -------- Фильтрация single --------
-    filteredIds = [
-        b["maskNum"] for b in bacteriaInfo
-        if params["minSingleArea"] < b["maskArea"] <= params["maxSingleArea"]
-        and b["maskEcc"] >= params["minSingleEcc"]
-    ]
-    singleMask = np.isin(st.session_state.predictedLabels["single"], filteredIds).astype(np.uint8)
+def filtrationObjects(objectsInfo, predictedObjects, params, showIntermedAsBf=True):
+    filteredObjects = {}
 
-    # Морфология для single (сглаживание и удаление шумов)
-    singleMask = morphology.remove_small_objects(
-        measure.label(singleMask, connectivity=1),
-        min_size=params.get("minSingleArea", 10)
-    )
-    singleMask = (singleMask > 0).astype(np.uint8)
-    singleMask = cv2.morphologyEx(singleMask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-    singleMask = cv2.morphologyEx(singleMask, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
+    for className, objList in objectsInfo.items():
+        obj_mask = predictedObjects[className]
+        filtered_mask = np.zeros_like(obj_mask, dtype=np.int32)
 
-    # -------- Фильтрация bf --------
-    # Лейблинг объектов биоплёнки
-    labeled_bf = measure.label(biofilmMask, connectivity=1)
-    filteredBfMask = np.zeros_like(biofilmMask, dtype=np.uint8)
+        for obj in objList:
+            area_ok = True
+            ecc_ok = True
 
-    for region in measure.regionprops(labeled_bf):
-        if params["minBfArea"] < region.area <= params["maxBfArea"]:
-            filteredBfMask[tuple(zip(*region.coords))] = 1
+            if className == "single":
+                area_ok = params["minSingleArea"] <= obj["area"] <= params["maxSingleArea"]
+                ecc_ok = (obj.get("eccentricity") is None or obj["eccentricity"] >= params["minSingleEcc"])
+            elif (className == "biofilm" or className == "intermediate") and showIntermedAsBf == True:
+                area_ok = params["minBfArea"] <= obj["area"] <= params["maxBfArea"]
+            elif className == "intermediate" and showIntermedAsBf == False:
+                area_ok = params["minIntermediateArea"] <= obj["area"] <= params["maxIntermediateArea"]
+                
+            if area_ok and ecc_ok:
+                filtered_mask[obj_mask == obj["id"]] = obj["id"]
 
-    # Морфология для bf (сглаживание контуров)
-    filteredBfMask = cv2.morphologyEx(filteredBfMask, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
-    filteredBfMask = cv2.morphologyEx(filteredBfMask, cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8))
-    filteredBfMask = morphology.remove_small_holes(filteredBfMask.astype(bool), area_threshold=500)
-    filteredBfMask = filteredBfMask.astype(np.uint8)
+        filteredObjects[className] = filtered_mask
 
-    return {
-        "single": singleMask,
-        "bf": filteredBfMask
-    }
+    return filteredObjects
+
  
 
 if __name__ == "__main__":

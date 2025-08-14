@@ -10,6 +10,21 @@ import xml.etree.ElementTree as ET
 import numpy as np
 import re
 
+def rle_encode(mask: np.ndarray) -> str:
+    pixels = mask.flatten(order="C")
+    counts = []
+    current_pixel = pixels[0]
+    count = 1
+    for p in pixels[1:]:
+        if p == current_pixel:
+            count += 1
+        else:
+            counts.append(count)
+            count = 1
+            current_pixel = p
+    counts.append(count)
+    return ", ".join(map(str, counts))
+
 def rle_decode(rle_str, shape):
     rle_numbers = [int(num) for num in re.findall(r'\d+', rle_str)]
     img = np.zeros(shape[0] * shape[1], dtype=np.uint8)
@@ -25,32 +40,13 @@ def rle_decode(rle_str, shape):
         if i < n:
             length = rle_numbers[i]
             i += 1
-        # Сдвигаемся
         index += start
-        # Если длина > 0, заливаем участок
         if length > 0:
             if index + length > img.size:
                 raise ValueError(f"RLE segment exceeds mask size: index {index} length {length} size {img.size}")
             img[index:index+length] = 1
             index += length
     return img.reshape(shape)
-
-def rle_encode(mask: np.ndarray) -> str:
-    # Flatten по строкам (row-major)
-    pixels = mask.flatten(order="C")
-    # Список длин чередующихся серий (0,1,0,1,...)
-    counts = []
-    current_pixel = pixels[0]
-    count = 1
-    for p in pixels[1:]:
-        if p == current_pixel:
-            count += 1
-        else:
-            counts.append(count)
-            count = 1
-            current_pixel = p
-    counts.append(count)
-    return ", ".join(map(str, counts))
 
 def loadMasksFromZip(uploaded_zip, imgWidth, imgHeight):
     if uploaded_zip is None:
@@ -65,17 +61,8 @@ def loadMasksFromZip(uploaded_zip, imgWidth, imgHeight):
             
             with z.open(xml_filename) as xml_file:
                 xml_bytes = xml_file.read()
-                masks = updateMaskCVAT(xml_bytes, imgWidth, imgHeight)
-                
-                singleBinary = masks.get("single", np.zeros((imgHeight, imgWidth), dtype=np.uint8))
-                labeledSingle = measure.label(singleBinary)
-                
-                labeledBf = masks.get("bf", np.zeros((imgHeight, imgWidth), dtype=np.uint8))
-                labeledMasks = {
-                    "single": labeledSingle,
-                    "bf": labeledBf
-                }
-                return labeledMasks
+                predicted_objects = updateMaskCVAT(xml_bytes, imgWidth, imgHeight)
+                return predicted_objects
 
     except zipfile.BadZipFile:
         print("Uploaded file is not a valid ZIP archive.")
@@ -83,36 +70,41 @@ def loadMasksFromZip(uploaded_zip, imgWidth, imgHeight):
 
 
 def updateMaskCVAT(xml_path, width, height):
+    label_map = {
+        "Microorganisms": "single",
+        "Biofilm": "biofilm",
+        "intermediate-stage": "intermediate"
+    }
+
     xml_io = io.BytesIO(xml_path)
     tree = ET.parse(xml_io)
     root = tree.getroot()
 
-    bf_mask = np.zeros((height, width), dtype=np.uint8)
-    single_mask = np.zeros((height, width), dtype=np.uint8)
+    masks = {k: np.zeros((height, width), dtype=np.uint16) for k in label_map.values()}
+    next_obj_id = {k: 1 for k in label_map.values()} 
 
     for image in root.findall('image'):
         for mask in image.findall('mask'):
             label = mask.attrib['label']
+            if label not in label_map:
+                continue
+
+            class_key = label_map[label]
+
             rle = mask.attrib['rle']
             left = int(mask.attrib.get('left', 0))
             top = int(mask.attrib.get('top', 0))
             w = int(mask.attrib.get('width', 0))
             h = int(mask.attrib.get('height', 0))
-            z_order = int(mask.attrib.get('z_order', 0))
 
-            decoded_mask = rle_decode(rle, (h, w))
+            decoded = rle_decode(rle, (h, w)).astype(np.uint8)
+            if np.any(decoded):
+                obj_id = next_obj_id[class_key]
+                masks[class_key][top:top+h, left:left+w][decoded > 0] = obj_id
+                next_obj_id[class_key] += 1
 
-            if top + h > height or left + w > width:
-                raise ValueError(f"Mask with position ({left},{top}) and size ({w}x{h}) exceeds image bounds ({width}x{height})")
+    return masks
 
-            if label == "Biofilm":
-                region = bf_mask[top:top+h, left:left+w]
-                bf_mask[top:top+h, left:left+w] = np.maximum(region, decoded_mask * (z_order + 1))
-            elif label == "Microorganisms":
-                region = single_mask[top:top+h, left:left+w]
-                single_mask[top:top+h, left:left+w] = np.maximum(region, decoded_mask * (z_order + 1))
-
-    return {"bf": bf_mask, "single": single_mask}
 
 def get_contours_as_points(mask: np.ndarray, width: int, height: int):
     bin_mask = (mask > 0).astype(np.uint8) * 255
@@ -144,9 +136,16 @@ def get_contours_as_points(mask: np.ndarray, width: int, height: int):
 def makeCVATbackupPolygons(
     image: Image.Image,
     original_filename: str,
-    predicted_labels: dict,
-    width, height
+    filtered_objects: dict,
+    width: int,
+    height: int
 ):
+    class_to_cvat = {
+        "single": "Microorganisms",
+        "biofilm": "Biofilm",
+        "intermediate": "intermediate-stage"
+    }
+
     base_name, ext = os.path.splitext(original_filename)
     archive_name = f"backup-{datetime.now().strftime('%d-%m-%Y-%H-%M')}.zip"
 
@@ -185,20 +184,30 @@ def makeCVATbackupPolygons(
         "jobs": [{"status": "annotation", "type": "annotation", "start_frame": 0, "stop_frame": 0, "frames": []}],
     }
     task_content = json.dumps(task, ensure_ascii=False, indent=2)
-
-    # annotations.json — один кадр
     frame_obj = {"version": 0, "tags": [], "shapes": [], "tracks": []}
 
-    # Microorganisms
-    if "single" in predicted_labels and predicted_labels["single"] is not None:
-        single_mask = np.asarray(predicted_labels["single"])
-        unique_ids = np.unique(single_mask)
+    for class_name, labeled_mask in filtered_objects.items():
+        if class_name not in class_to_cvat:
+            continue 
+
+        unique_ids = np.unique(labeled_mask)
         unique_ids = unique_ids[unique_ids != 0]  # убираем фон
+
         for obj_id in unique_ids:
-            obj_mask = (single_mask == obj_id).astype(np.uint8)
-            contours_points_list = get_contours_as_points(obj_mask, width, height)
-            for points in contours_points_list:
-                shape = {
+            obj_mask = (labeled_mask == obj_id).astype(np.uint8)
+            contours, _ = cv2.findContours(obj_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            for contour in contours:
+                if len(contour) < 3:
+                    continue
+
+                points = contour.reshape(-1, 2).flatten().astype(float).tolist()
+
+                # Замкнуть контур
+                if points[0] != points[-2] or points[1] != points[-1]:
+                    points.extend(points[:2])
+
+                frame_obj["shapes"].append({
                     "type": "polygon",
                     "occluded": False,
                     "z_order": 0,
@@ -208,52 +217,26 @@ def makeCVATbackupPolygons(
                     "group": 0,
                     "source": "manual",
                     "attributes": [],
-                    "label": "Microorganisms",
-                }
-                frame_obj["shapes"].append(shape)
+                    "label": class_to_cvat[class_name],
+                })
 
-    # Biofilm
-    if "bf" in predicted_labels and predicted_labels["bf"] is not None:
-        bf_mask = np.asarray(predicted_labels["bf"])
-        if bf_mask.dtype != np.uint8:
-            bf_mask = (bf_mask > 0.5).astype(np.uint8)
-        contours_points_list = get_contours_as_points(bf_mask, width, height)
-        for points in contours_points_list:
-            shape = {
-                "type": "polygon",
-                "occluded": False,
-                "z_order": 0,
-                "rotation": 0.0,
-                "points": points,
-                "frame": 0,
-                "group": 0,
-                "source": "manual",
-                "attributes": [],
-                "label": "Biofilm",
-            }
-            frame_obj["shapes"].append(shape)
-
+    # annotations.json
     annotations = [frame_obj]
     annotations_content = json.dumps(annotations, ensure_ascii=False, separators=(',', ':'))
-
-    # Создаем ZIP в памяти
+    
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        # Картинка
         img_bytes = io.BytesIO()
         image.save(img_bytes, format=image.format or ext.replace(".", "").upper())
         img_bytes.seek(0)
         zf.writestr(f"data/{original_filename}", img_bytes.read())
-
-        # manifest.jsonl
         zf.writestr("data/manifest.jsonl", manifest_content)
-
-        # task.json и annotations.json
         zf.writestr("task.json", task_content)
         zf.writestr("annotations.json", annotations_content)
 
     zip_buffer.seek(0)
     return zip_buffer
+
 
 def makeXMLforCVAT(image_name, image_width, image_height, labels, masks, crop_bottom=120):
     """

@@ -6,7 +6,7 @@ import re
 
 import streamlit as st
 
-def normalizeScaleBar(c_fullImage, lowerBound = None, bright_threshold=230):
+def normalizeScaleBar(c_fullImage, lowerBound = None, bright_threshold=240):
     if lowerBound is None:
         return c_fullImage  
     
@@ -20,10 +20,10 @@ def normalizeScaleBar(c_fullImage, lowerBound = None, bright_threshold=230):
     return img_normalized
 
 
-def findBorder(c_fullImage, thr = 0.2):    
+def findBorder(c_fullImage, thr = 0.35):    
     row_sum = np.sum(c_fullImage, axis = 1, dtype = np.int64)
 
-    for i in range(len(row_sum) - 1):
+    for i in range(10, len(row_sum) - 1):
         if np.abs(row_sum[i] - row_sum[i + 1]) >= row_sum[i] * thr:
             return i + 1
     
@@ -62,33 +62,23 @@ def increase(c_text):
 
 def scale(c_text):
     try:
-        matchesScale = re.findall(r"[0-9]*\.?[0-9]+[a-zA-Z]*m", c_text)
-        if not matchesScale:
-            return None, None
-
-        scale_str = matchesScale[0]
-        value = float(re.findall(r"[0-9]*\.?[0-9]+", scale_str)[0])
-
-        if 'n' in scale_str:
-            _scale = value / 1000
-            
-        elif 'u' in scale_str or 'p' in scale_str:
-            _scale = value
-        else:
-            _scale = value 
-            
+        matchesScale = re.findall(r"[0-9]*\.?[0-9]+[nup]m", c_text)[0]
+        if matchesScale[-2] == 'n':
+            _scale = float(matchesScale[:-2]) / 1000
+        elif matchesScale[-2] == 'u' or matchesScale[-2] == 'p':
+            _scale = float(matchesScale[:-2])
     except Exception:
         _scale = None
-        scale_str = None
+        matchesScale = None
 
-    return _scale, scale_str
-
+    return _scale, matchesScale
 
 @st.cache_data(show_spinner = False)
 def estimateScale(c_image):
     
     lowerBound = findBorder(c_image)
     c_image = normalizeScaleBar(c_image, lowerBound)
+    #Image.fromarray(c_image).show()
     
     if (lowerBound is not None):      
         text = findText(c_image[lowerBound:, :])
@@ -107,49 +97,59 @@ def estimateScale(c_image):
 
 if __name__ == "__main__":    
 
-    img_path = r"C:\Users\Victory\YandexDisk\WORK\BIOFILMS\data\scale-1k\22-BSE-1k-T1.bmp"
+    img_path = r"C:\Users\Victory\YandexDisk\WORK\BIOFILMS\оригиналы снимков\7(x500)_1936.bmp"
+    tempArrImg = np.array(Image.open(img_path), dtype='uint8')
+    imgW, imgHeight = Image.open(img_path).size
+    autoScale, scaleData = estimateScale(tempArrImg)
+    autoScaleText = scaleData[4] if scaleData else None
+    infoLineHeight = imgHeight - scaleData[0] if scaleData else None
+        
+    imgScale = autoScale
+    infoLineHeight = infoLineHeight
+    scaleMkm = autoScaleText
+        
+    # img = Image.open(img_path).convert('L')
+    # grayImage = np.array(img, dtype='uint8')
+    
 
+    # # Высота только изображения (без нижней сноски)
+    # lowerBound = findBorder(grayImage)
+    # print(f"Граница: {lowerBound} px")
 
-    img = Image.open(img_path).convert('L')
-    grayImage = np.array(img, dtype='uint8')
+    # if not (lowerBound is None):
+    #     # Сноска
+    #     #plt.imshow(grayImage[lowerBound:, :])
 
-    # Высота только изображения (без нижней сноски)
-    lowerBound = findBorder(grayImage)
-    print(f"Граница: {lowerBound} px")
+    #     # Только изображение
+    #     #plt.imshow(grayImage[:lowerBound, :])
 
-    if not (lowerBound is None):
-        # Сноска
-        #plt.imshow(grayImage[lowerBound:, :])
+    #     # Распознавание текста в сноске
+    #     text = findText(grayImage[lowerBound:, :])
+    #     print("Текст:", text)
 
-        # Только изображение
-        #plt.imshow(grayImage[:lowerBound, :])
+    #     # Увеличение
+    #     increaseVal = increase(text)
+    #     print(f"Увеличение: {increaseVal}")
 
-        # Распознавание текста в сноске
-        text = findText(grayImage[lowerBound:, :])
-        print("Текст:", text)
+    #     # Длина шкалы в микрометрах
+    #     scaleVal, _ = scale(text)
 
-        # Увеличение
-        increaseVal = increase(text)
-        print(f"Увеличение: {increaseVal}")
+    #     # Длина шкалы в пикселях
+    #     scaleLengthVal, _ = scaleLength(grayImage, lowerBound)
+    #     print(f"Длина шкалы: {scaleLengthVal} px")
 
-        # Длина шкалы в микрометрах
-        scaleVal, _ = scale(text)
-
-        # Длина шкалы в пикселях
-        scaleLengthVal, _ = scaleLength(grayImage, lowerBound)
-        print(f"Длина шкалы: {scaleLengthVal} px")
-
-        if (scaleVal is not None) and (scaleLengthVal is not None):
-            print(f"mkm / pixel: {scaleVal} / {scaleLengthVal} = {scaleVal / scaleLengthVal}")
-            print(f"pixel / mkm: {scaleLengthVal} / {scaleVal} = {scaleLengthVal / scaleVal}")
-            
-
+    #     if (scaleVal is not None) and (scaleLengthVal is not None):
+    #         print(f"mkm / pixel: {scaleVal} / {scaleLengthVal} = {scaleVal / scaleLengthVal}")
+    #         print(f"pixel / mkm: {scaleLengthVal} / {scaleVal} = {scaleLengthVal / scaleVal}")
+           
+ 
     # _, dispScale = estimateScale(grayImage)
 
-    # x = dispScale[1]; y = dispScale[0]; length = dispScale[2]; diff = 5;
-    # scaleLineCoords = np.array([
-    #     [x, y-diff], [x, y+diff], [x, y], [x+length, y], [x+length, y+diff], [x+length, y-diff]
-    # ])
+
+    # # x = dispScale[1]; y = dispScale[0]; length = dispScale[2]; diff = 5;
+    # # scaleLineCoords = np.array([
+    # #     [x, y-diff], [x, y+diff], [x, y], [x+length, y], [x+length, y+diff], [x+length, y-diff]
+    # # ])
        
     # fig = make_subplots(
     #     rows=1, 
@@ -159,20 +159,18 @@ if __name__ == "__main__":
     #     specs=[[{"type": "heatmap"}, {"type": "scatter"}]]  # типы графиков
     # )
 
-    # Добавляем изображение (как heatmap) в первую колонку
     # fig.add_trace(
     #     go.Heatmap(z=grayImage, colorscale="Viridis", showscale=False),
     #     row=1, col=1
     # )
     
     # row_sum = np.sum(grayImage, axis = 1, dtype = np.int64)
-    # Добавляем Scatter во вторую колонку
+
     # fig.add_trace(
     #     go.Scatter(y=np.arange(1,len(row_sum),1), x=row_sum, mode="lines"),
     #     row=1, col=2
     # )
 
-    # Настраиваем оси и внешний вид
     # fig.update_layout(
     #     title="Изображение + график справа",
     #     xaxis_title="X (изображение)",

@@ -73,10 +73,10 @@ class TestDataset(Dataset):
 
 # === FUNCTIONS ===
 def loadCheckpoint(model, checkpoint_path):
-    model = nn.DataParallel(model) 
-    model.load_state_dict(torch.load(checkpoint_path, map_location="cpu"))
-    model = model.module    
-    print(f"Model loaded from: {checkpoint_path}")
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    state_dict = {k.replace('module.', ''): v for k, v in checkpoint.items()}
+    model.load_state_dict(state_dict)
+    return model
     
 @st.cache_resource
 def loadCellposeModel():
@@ -84,12 +84,12 @@ def loadCellposeModel():
             gpu=True
         )
 
-def buildModel(encoderName = 'resnet34', encoderWeights = 'imagenet', activation = None):
+def buildModel(classesCount = 4, encoderName = 'resnet34', encoderWeights = 'imagenet', activation = None):
     model = smp.UnetPlusPlus(
         encoder_name=encoderName,
         encoder_weights=encoderWeights,
         in_channels=1,  # grayscale
-        classes=2,
+        classes=classesCount,
         activation=activation
     )
     return model
@@ -127,3 +127,4 @@ def makePatches(imgPIL, patch_size=(512, 512), stride=(128, 128)):
             patch_id += 1
             
     return patch_list, coords
+

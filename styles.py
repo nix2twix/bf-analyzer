@@ -38,11 +38,20 @@ def loadStyles():
             
             div.stSlider > div[data-baseweb="slider"] > div > div > div[role="slider"]{
                 background-color: rgb(255, 255, 255);
-            }            
+            }       
+                
+            div.stSlider > div[data-baseweb] {
+                    height: 20px;
+                    margin-bottom: 1.5rem;  
+                }
+            div.stSlider label, div.stSlider div[data-testid="stMarkdownContainer"] {
+                    font-size: 0.8rem; 
+                    margin-bottom: 0rem;
+                }
             
-            .stSlider, .stSelectbox {
+            .stSelectbox {
                 margin-top: -0.2rem !important;
-                margin-bottom: -0.1rem !important;
+                margin-bottom: 1.5rem !important;
             }
             
             div.stSlider > div[data-baseweb="slider"] > div > div > div[role="slider"]{
