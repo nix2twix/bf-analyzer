@@ -4,7 +4,8 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>ce49cf83-dbe2-479f-b0f8-76dc3c6c6c8c</ProjectGuid>
     <ProjectHome>.</ProjectHome>
-    <StartupFile>autoScale.py</StartupFile>
+    <StartupFile>
+    </StartupFile>
     <SearchPath>
     </SearchPath>
     <WorkingDirectory>.</WorkingDirectory>
@@ -23,21 +24,43 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="autoScale.py" />
-    <Compile Include="bfAnalyzer.py" />
-    <Compile Include="processHandler.py" />
-    <Compile Include="processingFunctions.py" />
-    <Compile Include="resultsHandler.py" />
-    <Compile Include="styles.py" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include=".streamlit\config.toml" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include=".streamlit\" />
-  </ItemGroup>
-  <ItemGroup>
     <InterpreterReference Include="Global|PythonCore|3.11" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="app\" />
+    <Folder Include="app\.streamlit\" />
+    <Folder Include="model\" />
+    <Folder Include="core\" />
+    <Folder Include="processing\" />
+    <Folder Include="src\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="app\.streamlit\config.toml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="app\app.py" />
+    <Compile Include="app\styles.py" />
+    <Compile Include="app\__init__.py" />
+    <Compile Include="core\componentsUI.py" />
+    <Compile Include="core\factoryUI.py" />
+    <Compile Include="core\handlers.py" />
+    <Compile Include="core\modelConfigs.py" />
+    <Compile Include="core\stateManager.py" />
+    <Compile Include="core\__init__.py" />
+    <Compile Include="model\__init__.py" />
+    <Compile Include="processing\filtration.py" />
+    <Compile Include="processing\objects.py" />
+    <Compile Include="processing\postprocessing.py" />
+    <Compile Include="processing\preprocessing.py" />
+    <Compile Include="processing\segmentation.py" />
+    <Compile Include="processing\statistics.py" />
+    <Compile Include="processing\__init__.py" />
+    <Compile Include="src\drawing.py" />
+    <Compile Include="model\model.py" />
+    <Compile Include="src\autoscale.py" />
+    <Compile Include="src\dataset.py" />
+    <Compile Include="src\converter.py" />
+    <Compile Include="src\__init__.py" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in

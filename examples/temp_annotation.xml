@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<annotations>
+  <version>1.1</version>
+  <meta>
+    <job>
+      <id>2843086</id>
+      <size>1</size>
+      <mode>annotation</mode>
+      <overlap>0</overlap>
+      <bugtracker></bugtracker>
+      <created>2025-08-12 10:33:16.539582+00:00</created>
+      <updated>2025-08-12 10:42:26.292629+00:00</updated>
+      <subset>Train</subset>
+      <start_frame>0</start_frame>
+      <stop_frame>0</stop_frame>
+      <frame_filter></frame_filter>
+      <segments>
+        <segment>
+          <id>2844971</id>
+          <start>0</start>
+          <stop>0</stop>
+          <url>https://app.cvat.ai/api/jobs/2843086</url>
+        </segment>
+      </segments>
+      <owner>
+        <username>dpreem</username>
+        <email>pawlova12@gmail.com</email>
+      </owner>
+      <assignee></assignee>
+      <labels>
+        <label>
+          <name>Microorganisms</name>
+          <color>#b83df5</color>
+          <type>any</type>
+          <attributes>
+          </attributes>
+        </label>
+        <label>
+          <name>Biofilm</name>
+          <color>#24b353</color>
+          <type>any</type>
+          <attributes>
+          </attributes>
+        </label>
+        <label>
+          <name>Defect</name>
+          <color>#ff0000</color>
+          <type>any</type>
+          <attributes>
+          </attributes>
+        </label>
+        <label>
+          <name>intermediate-stage</name>
+          <color>#ddff33</color>
+          <type>any</type>
+          <attributes>
+          </attributes>
+        </label>
+      </labels>
+    </job>
+    <dumped>2025-08-12 10:42:31.231676+00:00</dumped>
+  </meta>
+  <image id="0" name="18-BSE-1k-T1.bmp" width="2560" height="1920">
+    <mask label="Biofilm" source="manual" occluded="0" rle="31, 6, 32, 9, 30, 11, 27, 13, 26, 14, 25, 15, 24, 16, 23, 17, 21, 18, 21, 19, 20, 20, 19, 20, 19, 20, 19, 21, 18, 21, 17, 22, 17, 22, 18, 21, 18, 21, 18, 21, 19, 20, 19, 20, 19, 21, 18, 21, 17, 22, 17, 23, 17, 22, 17, 22, 18, 22, 18, 21, 18, 21, 19, 21, 18, 20, 20, 19, 21, 19, 61" left="595" top="1764" width="40" height="36" z_order="0">
+    </mask>
+    <mask label="Biofilm" source="manual" occluded="0" rle="0, 6, 13, 18, 1, 18, 1, 18, 1, 18, 1, 18, 1, 18, 1, 18, 20" left="1426" top="1791" width="19" height="9" z_order="0">
+    </mask>
+    <mask label="Biofilm" source="manual" occluded="0" rle="12, 6, 23, 34, 2, 36, 1, 37, 1, 37, 1, 37, 1, 36, 2, 36, 40" left="533" top="1791" width="38" height="9" z_order="0">
+    </mask>
+    <mask label="Biofilm" source="manual" occluded="0" rle="47, 6, 150, 8, 149, 9, 147, 11, 145, 13, 143, 14, 143, 15, 141, 16, 141, 17, 139, 18, 139, 18, 139, 18, 139, 18, 138, 19, 138, 19, 138, 19, 137, 20, 137, 20, 137, 20, 137, 20, 137, 20, 136, 21, 136, 21, 136, 21, 136, 21, 136, 21, 136, 21, 135, 22, 135, 22, 135, 22, 135, 22, 135, 22, 135, 22, 135, 21, 38, 6, 91, 21, 13, 6, 18, 12, 87, 21, 10, 20, 5, 16, 85, 21, 8, 44, 84, 21, 7, 45, 84, 22, 4, 47, 84, 73, 83, 74, 83, 74, 83, 73, 84, 72, 84, 73, 84, 73, 83, 73, 84, 72, 85, 72, 85, 71, 86, 70, 86, 70, 87, 70, 87, 70, 13, 9, 65, 70, 12, 11, 63, 72, 9, 14, 62, 74, 6, 16, 61, 96, 61, 96, 60, 98, 59, 98, 59, 98, 58, 99, 58, 99, 58, 99, 58, 99, 58, 99, 58, 99, 58, 99, 58, 98, 59, 98, 59, 98, 59, 98, 59, 97, 60, 97, 60, 96, 61, 96, 61, 95, 62, 95, 61, 95, 62, 95, 62, 95, 61, 96, 61, 97, 59, 111, 45, 114, 42, 117, 39, 129, 27, 132, 25, 133, 23, 134, 23, 135, 22, 135, 21, 136, 21, 136, 21, 136, 3, 7, 11, 136, 1, 11, 8, 136, 2, 14, 4, 137, 2, 155, 2, 154, 3, 153, 4, 151, 6, 149, 8, 146, 11, 76, 6, 63, 12, 73, 10, 61, 13, 70, 13, 60, 14, 69, 14, 60, 14, 68, 15, 60, 14, 67, 16, 60, 14, 66, 16, 60, 15, 64, 18, 59, 16, 62, 19, 60, 16, 61, 19, 60, 17, 60, 19, 61, 19, 56, 19, 62, 21, 53, 20, 63, 22, 50, 22, 62, 24, 46, 25, 61, 25, 43, 28, 61, 26, 39, 31, 60, 28, 34, 35, 59, 31, 27, 40, 58, 34, 23, 42, 57, 43, 12, 45, 56, 101, 55, 102, 53, 104, 52, 105, 51, 106, 49, 109, 47, 110, 45, 112, 44, 114, 42, 115, 41, 116, 40, 118, 37, 120, 36, 121, 35, 122, 34, 124, 31, 127, 29, 130, 26, 142, 13, 207" left="0" top="190" width="157" height="146" z_order="0">
+    </mask>
+  </image>
+</annotations>
