@@ -1,4 +1,4 @@
-﻿# === LIBRARIES GENERAL ===
+# === LIBRARIES GENERAL ===
 import streamlit as st
 import numpy as np
 from PIL import Image
@@ -61,6 +61,14 @@ class StateManager:
         self.state.model_config = self.get_config()
         self._init_dynamic_filtration_settings()
         
+        # Очищаем кэш изображений
+        self._clear_image_cache()
+    
+    def _clear_image_cache(self):
+        """Очистка кэша изображений в session_state"""
+        if "image_cache" in st.session_state:
+            st.session_state.image_cache = {}
+        
     def _init_dynamic_filtration_settings(self):
         """
         Первоначальная инициализация параметров фильтрации по конфигу
@@ -72,16 +80,13 @@ class StateManager:
         for param_name, (min_val, max_val) in config.filtration_params.items():
             if param_name not in self.state.slider_ranges:
                 self.state.slider_ranges[param_name] = (min_val, max_val)
-                #print(f"  slider_ranges[{param_name}] = ({min_val}, {max_val})")
         
             if param_name not in self.state.filtration_params:
                 self.state.filtration_params[param_name] = {
                 'min': min_val,
                 'max': max_val
                 }
-                #print(f"  filtration_params[{param_name}] = {max_val}")
                 
-    
     def update_slider_range(self, param_name: str, min_val: float, max_val: float):
         """Обновление диапазона слайдера"""
         self.state.slider_ranges[param_name] = (min_val, max_val)
@@ -135,6 +140,9 @@ class StateManager:
         self.reset_results()
         self.state.last_uploaded_file = None
         self.state.last_uploaded_ann = None
+        
+        # Очищаем кэш изображений
+        self._clear_image_cache()
 
         print(f"[INFO] Model changed from {old_model} to {model_name}. Results cleared.")
         return True
@@ -150,6 +158,8 @@ class StateManager:
         self.state.isShowIntermediate = True
         self.state.polygonsCVAT = ""
         self.state.zipBuffer = ""
+        # Очищаем кэш изображений
+        self._clear_image_cache()
     
     def get_config(self) -> Optional[ModelConfig]:
         return MODEL_CONFIGS.get(self.state.get("modelType"))
@@ -193,9 +203,6 @@ class StateManager:
         if not config:
             return
 
-        #print(f"\n[DEBUG] _update_slider_ranges_from_stats called")
-        #print(f"  area_stats: {area_stats}")
-
         for param_name in list(self.state.slider_ranges.keys()):
             if "area" not in param_name:
                 continue
@@ -206,8 +213,6 @@ class StateManager:
                 detected_min = area_stats[class_name]["min_area"]
                 detected_max = area_stats[class_name]["max_area"]
         
-                #print(f"  {param_name}: detected min={detected_min}, max={detected_max}")
-        
                 # Базовые значения
                 min_val = max(detected_min, 10)
                 max_val = detected_max
@@ -216,7 +221,6 @@ class StateManager:
                 if min_val >= max_val:
                     min_val = max(10, min_val - 100)
                     max_val = max_val + 100
-                    #print(f"    after expand: min={min_val}, max={max_val}")
             
                 # Обновляем диапазон слайдера
                 self.update_slider_range(param_name, min_val, max_val)
@@ -234,42 +238,41 @@ class StateManager:
             return
     
         for param_name in list(self.state.slider_ranges.keys()):
-                if "ecc" not in param_name:
-                    continue
+            if "ecc" not in param_name:
+                continue
         
-                class_name = param_name.replace("_ecc", "")
+            class_name = param_name.replace("_ecc", "")
     
-                ecc_values = []
-                if class_name in objects_info:
-                    for obj in objects_info[class_name]:
-                        ecc = obj.get("eccentricity")
-                        if ecc is not None and not np.isnan(ecc):
-                            ecc_values.append(ecc)
+            ecc_values = []
+            if class_name in objects_info:
+                for obj in objects_info[class_name]:
+                    ecc = obj.get("eccentricity")
+                    if ecc is not None and not np.isnan(ecc):
+                        ecc_values.append(ecc)
     
-                if ecc_values:
-                    detected_min = min(ecc_values)
-                    detected_max = max(ecc_values)
+            if ecc_values:
+                detected_min = min(ecc_values)
+                detected_max = max(ecc_values)
             
-                    min_val = detected_min
-                    max_val = detected_max
+                min_val = detected_min
+                max_val = detected_max
 
-                    # Если все объекты одного размера, расширяем диапазон
-                    if min_val >= max_val:
-                        min_val = max(0.0, min_val - 0.1)
-                        max_val = min(1.0, max_val + 0.1)
+                # Если все объекты одного размера, расширяем диапазон
+                if min_val >= max_val:
+                    min_val = max(0.0, min_val - 0.1)
+                    max_val = min(1.0, max_val + 0.1)
         
-                    # Обновляем диапазон слайдера
-                    self.update_slider_range(param_name, min_val, max_val)
+                # Обновляем диапазон слайдера
+                self.update_slider_range(param_name, min_val, max_val)
             
-                    # Обновляем filtration_params
-                    self.state.filtration_params[param_name] = {
-                        'min': min_val,
-                        'max': max_val
-                    }
+                # Обновляем filtration_params
+                self.state.filtration_params[param_name] = {
+                    'min': min_val,
+                    'max': max_val
+                }
                 
     def update_filtration_params(self):
         """Обновление параметров фильтрации (старый метод для совместимости)"""
-        # Ничего не делаем, так как параметры обновляются через UI
         pass
     
     def apply_filtration(self):
@@ -288,4 +291,5 @@ class StateManager:
             )
         
             self.state.filteredObjectsInfo = None
-        
+            # Очищаем кэш изображений при изменении фильтрации
+            self._clear_image_cache()

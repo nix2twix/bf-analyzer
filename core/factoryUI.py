@@ -1,4 +1,4 @@
-﻿# === LIBRARIES GENERAL ===
+# === LIBRARIES GENERAL ===
 import streamlit as st
 from typing import Dict
 
@@ -19,6 +19,20 @@ class ModelUIFactory:
         if "filtration_params" not in state:  
             state["filtration_params"] = {}
 
+        # Добавляем CSS для улучшения отзывчивости слайдеров
+        css_rules.append("""
+            div[data-testid="stSlider"] {
+                pointer-events: auto !important;
+            }
+            div[data-testid="stSlider"] > div {
+                pointer-events: auto !important;
+            }
+            div[data-testid="stSlider"] [role="slider"] {
+                pointer-events: auto !important;
+                cursor: pointer !important;
+            }
+        """)
+
         for param_name, (min_default, max_default) in config.filtration_params.items():
             # Получаем диапазон слайдера из состояния
             if param_name in state["slider_ranges"]:
@@ -31,19 +45,17 @@ class ModelUIFactory:
             # Получаем текущее значение из filtration_params
             if param_name in state["filtration_params"]:
                 current = state["filtration_params"][param_name]
-                # Поддержка старого формата (одиночное значение) и нового (словарь с min/max)
                 if isinstance(current, dict):
                     current_min = current.get('min', slider_min)
                     current_max = current.get('max', slider_max)
                 else:
-                    # Старый формат - конвертируем в пару
                     current_min = slider_min
                     current_max = current
             else:
                 current_min = slider_min
                 current_max = slider_max
 
-            # Корректируем, чтобы значения были в пределах слайдера
+            # Корректируем значения
             current_min = max(slider_min, min(current_min, slider_max))
             current_max = min(slider_max, max(current_min, current_max))
 
@@ -54,16 +66,18 @@ class ModelUIFactory:
             # Красивое имя
             display_name = param_name.replace("_", " ").title()
 
-            # Определяем цвет для этого параметра
+            # Определяем цвет
             color = "#24b353"
             for class_name, (title, hex_color) in config.class_titles.items():
                 if class_name in param_name:
                     color = hex_color
                     break
 
-            key = f"slider_{param_name}"
+            # Уникальный ключ с timestamp для избежания конфликтов
+            import time
+            key = f"slider_{param_name}_{hash(str(state.get('predictedObjects')))}"
 
-            # Добавляем CSS правило
+            # Добавляем CSS правило для цвета
             css_rules.append(f"""
                 div[data-testid="stSlider"][data-key="{key}"] [role="slider"] {{
                     background-color: {color} !important;
@@ -74,7 +88,7 @@ class ModelUIFactory:
                 }}
             """)
 
-            # Создаем слайдер с двумя значениями (min и max)
+            # Создаем слайдер
             params[param_name] = st.slider(
                 display_name,
                 min_value=float(slider_min),
@@ -94,12 +108,10 @@ class ModelUIFactory:
     @staticmethod
     def create_statistics_ui(config: ModelConfig, result_info: Dict, img_area: float):
         """Динамическое создание UI статистики"""
-        # Группируем классы
         bacillus_classes = [c for c in config.class_names if "Bacillus" in c]
         coccus_classes = [c for c in config.class_names if "Coccus" in c]
         other_classes = [c for c in config.class_names if c not in bacillus_classes + coccus_classes and c not in ["bg", "background"]]
         
-        # Показываем секции
         if bacillus_classes:
             st.markdown("#### 🎯 Bacillus")
             for class_name in bacillus_classes:

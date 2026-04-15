@@ -1,4 +1,4 @@
-﻿# === LIBRARIES GENERAL ===
+# === LIBRARIES GENERAL ===
 import os
 
 from dataclasses import dataclass

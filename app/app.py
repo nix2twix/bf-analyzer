@@ -1,4 +1,4 @@
-﻿# === LIBRARIES GENERAL ===
+# === LIBRARIES GENERAL ===
 import streamlit as st
 
 # === PROJECT SCRIPTS ===
@@ -27,7 +27,7 @@ st.markdown("This tool is designed for processing SEM images of biofilms")
 st.markdown('<hr style="margin: 0.5rem 0;">', unsafe_allow_html=True)
 
 # === INTERFACE ===
-blockWorkspace, blockTools = st.columns([2.4, 1.2])
+blockWorkspace, gap, blockTools = st.columns([2.4, 0.1, 1.2])
 
 with blockTools:
     tabsTools = st.tabs(["🔬 Segmentation", "📊 Statistics & Import"])
@@ -40,12 +40,16 @@ with blockTools:
         # 2. Выбор модели
         model_selected = ui.render_model_selector_only()
         if model_selected:
-            state_manager.set_model(model_selected)
+            if state_manager.set_model(model_selected):
+                # Очищаем кэш изображений при смене модели
+                ui.clear_image_cache()
     
         # Обработка загрузки файла
         if uploaded_file and uploaded_file != state_manager.state.get("last_uploaded_file"):
             handlers.handle_file_upload(uploaded_file)
             state_manager.state.last_uploaded_file = uploaded_file
+            # Очищаем кэш при загрузке нового изображения
+            ui.clear_image_cache()
         
         # 3. Кнопка сегментации - ВСЕГДА ВИДНА
         seg_clicked = ui.render_segmentation_button_only()
@@ -53,6 +57,8 @@ with blockTools:
             handlers.handle_segmentation()
             state_manager.state.last_uploaded_ann = None
             state_manager.state.uploadedAnnName = None
+            # Очищаем кэш после сегментации
+            ui.clear_image_cache()
         
         # Определение масштаба
         if state_manager.state.uploadedImage is not None and state_manager.state.scaleInfo is None:
@@ -93,6 +99,8 @@ with blockTools:
                 filter_params = ui.render_filtration_ui(filtrationCol)
                 if filter_params:
                     handlers.handle_filtration(filter_params)
+                    # Очищаем кэш при изменении фильтров
+                    ui.clear_image_cache()
             
             with statCol:
                 st.markdown("### 📊 Statistics")
@@ -128,6 +136,8 @@ with blockTools:
                 if handlers.handle_annotation_apply(uploadedAnn):
                     state_manager.state.last_uploaded_ann = uploadedAnn
                     handlers.handle_statistics_update()
+                    # Очищаем кэш после загрузки аннотаций
+                    ui.clear_image_cache()
                     st.rerun()
         else:
             st.info("Upload an image first to import annotations")
@@ -164,6 +174,8 @@ with blockWorkspace:
         
         if st.button("♻ Clear cache"):
             st.cache_data.clear()
+            ui.clear_image_cache()
+            st.rerun()
 
         st.markdown("<p>Contact e-mail: pawlova12@yandex.ru</p>", 
                     unsafe_allow_html=True)

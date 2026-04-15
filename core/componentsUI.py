@@ -1,10 +1,10 @@
-﻿import streamlit as st
+import streamlit as st
 from typing import Dict, Any, Optional
 from .stateManager import StateManager
 from .factoryUI import ModelUIFactory
 import numpy as np
 from datetime import datetime
-from streamlit_image_coordinates import streamlit_image_coordinates
+from PIL import Image
 
 class UIComponents:
     """
@@ -15,10 +15,13 @@ class UIComponents:
     def __init__(self, state_manager: StateManager):
         self.state = state_manager
         self.factory = ModelUIFactory()
+        # Кэш для изображений в session_state
+        if "image_cache" not in st.session_state:
+            st.session_state.image_cache = {}
     
     # === ПУБЛИЧНЫЕ МЕТОДЫ ===
     def render_workflow_area(self) -> Optional[Any]:
-        """Отрисовывает рабочую область"""
+        """Отрисовывает рабочую область с кэшированием"""
         if self.state.state.uploadedImage is None:
             st.info("SEM-image was not uploaded.")
             return None
@@ -26,7 +29,7 @@ class UIComponents:
         self._render_scale_bar()
 
         if self.state.state.filteredObjects is not None:
-            from src.drawing import drawPicture
+            from src.drawing import drawPicture, get_objects_hash, resizeForDisplay
         
             has_objects = False
             for class_name, mask in self.state.state.filteredObjects.items():
@@ -35,12 +38,24 @@ class UIComponents:
                     break
         
             if has_objects:
-                display_image = drawPicture(
-                    self.state.state.uploadedImage,
-                    self.state.state.filteredObjects,
-                    self.state.state.classColors,
-                    self.state.state.isShowIntermediate
-                )
+                objects_hash = get_objects_hash(self.state.state.filteredObjects)
+                cache_key = f"img_{objects_hash}_{self.state.state.isShowIntermediate}"
+            
+                if cache_key not in st.session_state.image_cache:
+                    display_image = drawPicture(
+                        self.state.state.uploadedImage,
+                        self.state.state.filteredObjects,
+                        self.state.state.classColors,
+                        self.state.state.isShowIntermediate
+                    )
+                    # Уменьшаем только если очень большое (для ускорения загрузки)
+                    if display_image.width > 1200:
+                        display_image = resizeForDisplay(display_image, max_width=1200)
+                    st.session_state.image_cache[cache_key] = display_image
+                else:
+                    display_image = st.session_state.image_cache[cache_key]
+            
+                # Адаптивное отображение
                 st.image(display_image, caption="Segmentation result", use_container_width=True)
                 return display_image
             else:
@@ -52,8 +67,18 @@ class UIComponents:
                 )
                 return None
         else:
+            cache_key = f"orig_{self.state.state.imageName}"
+            if cache_key not in st.session_state.image_cache:
+                display_image = self.state.state.uploadedImage
+                if display_image.width > 1200:
+                    from src.drawing import resizeForDisplay
+                    display_image = resizeForDisplay(display_image, max_width=1200)
+                st.session_state.image_cache[cache_key] = display_image
+            else:
+                display_image = st.session_state.image_cache[cache_key]
+        
             st.image(
-                self.state.state.uploadedImage,
+                display_image,
                 caption=f"Loaded SEM-image {self.state.state.imageName}",
                 use_container_width=True
             )
@@ -66,13 +91,13 @@ class UIComponents:
 
         if self.state.state.filteredObjects is not None:
             from src.drawing import drawPicture
-        
+            
             has_objects = False
             for class_name, mask in self.state.state.filteredObjects.items():
                 if class_name not in ["bg", "background"] and np.sum(mask > 0) > 0:
                     has_objects = True
                     break
-        
+            
             if has_objects:
                 display_image = drawPicture(
                     self.state.state.uploadedImage,
@@ -86,11 +111,15 @@ class UIComponents:
         else:
             return self.state.state.uploadedImage
     
+    def clear_image_cache(self):
+        """Очистка кэша изображений"""
+        st.session_state.image_cache = {}
+    
     def render_file_uploader_only(self):
         """Отрисовывает только загрузчик файла"""
         return st.file_uploader(
             "⬇️ Upload SEM-image", 
-            type=["bmp", "png", "jpg"], 
+            type=["bmp", "png", "jpg", "jpeg"], 
             key="uploader"
         )
     
@@ -163,7 +192,6 @@ class UIComponents:
         """Отрисовывает кнопки экспорта с уникальными ключами"""
         col1, col2 = st.columns(2)
         
-        # Уникальные ключи для каждой вкладки
         cvat_key = f"cvat_export_{suffix}" if suffix else "cvat_export_main"
         results_key = f"results_export_{suffix}" if suffix else "results_export_main"
         

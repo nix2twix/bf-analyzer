@@ -1,4 +1,4 @@
-﻿# === LIBRARIES GENERAL ===
+# === LIBRARIES GENERAL ===
 import streamlit as st
 import numpy as np
 
