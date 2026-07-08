@@ -301,7 +301,5 @@ COMBINED_CONFIG = ModelConfig(
 
 MODEL_CONFIGS = {
     "Bacillus": BACILLUS_CONFIG,
-    "Coccus": COCCUS_CONFIG,
-    "Coccus_augmented": COCCUS_AUGMENTED_CONFIG,
-    "Coccus_no10imgs": COCCUS_NO10IMGS_CONFIG
+    "Coccus": COCCUS_CONFIG
 }

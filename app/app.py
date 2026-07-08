@@ -23,7 +23,7 @@ handlers = AppHandlers(state_manager)
 ui = UIComponents(state_manager)
 
 # === HEADER ===
-st.header(":red[THIS WEBSITE IS RUNNING IN TEST MODE!]")
+#st.header(":red[THIS WEBSITE IS RUNNING IN TEST MODE!]")
 
 # === HEADER ===
 st.header("🧪 Biofilm Analyzer")

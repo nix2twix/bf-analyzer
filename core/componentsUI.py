@@ -126,9 +126,8 @@ class UIComponents:
     def render_model_selector_only(self) -> str:
         """Отрисовывает только селектор модели"""
         model_options = {
-            "Bacillus": "NEW-Bacillus",
-            "Coccus": "OLD-Coccus",
-            "Coccus_no10imgs": "NEW-Coccus_NO10IMGS"
+            "Bacillus": "Bacillus",
+            "Coccus": "Coccus"
         }
         
         current_model = self.state.state.get("modelType", "Bacillus")
