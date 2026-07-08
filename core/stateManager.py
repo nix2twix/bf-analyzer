@@ -7,6 +7,7 @@ from typing import Optional, Dict
 # === PROJECT SCRIPTS ===
 from .modelConfigs import MODEL_CONFIGS, ModelConfig
 
+
 class StateManager:
     """Управляет состоянием приложения"""
     
@@ -20,6 +21,11 @@ class StateManager:
             self.reset_all()
             self.state.initialized = True
             self.state.segmentation_in_progress = False
+            self.state.manual_scale_set = False
+            self.state.apply_postprocessing = True 
+            self.state.postprocessed_masks = None
+            self.state.raw_masks = None
+            self.state.probs = None
     
     def reset_all(self):
         print("[DEBUG] reset_all called!")
@@ -33,7 +39,14 @@ class StateManager:
         self.state.imgScale = None
         self.state.scaleText = None
         self.state.infoLineHeight = None
+
+        self.state.postprocessed_masks = None
+        self.state.raw_masks = None
+        self.state.probs = None
         
+        # SCALE
+        self.state.manual_scale_set = False
+
         # PREDS
         self.state.probThreshold = 0.5
         self.state.predictedObjects = None
@@ -61,7 +74,10 @@ class StateManager:
         self.state.model_config = self.get_config()
         self._init_dynamic_filtration_settings()
         
-        # Очищаем кэш изображений
+        # PROCESSING SETTINGS
+        self.state.apply_postprocessing = True
+        
+        # CASH
         self._clear_image_cache()
     
     def _clear_image_cache(self):
@@ -86,6 +102,38 @@ class StateManager:
                 'min': min_val,
                 'max': max_val
                 }
+    
+ 
+    def toggle_postprocessing(self, value: bool):
+        """Переключает между постобработанными и сырыми масками"""
+        if self.state.apply_postprocessing != value:
+            self.state.apply_postprocessing = value
+        
+            # Проверяем, что маски существуют
+            if self.state.postprocessed_masks is not None and self.state.raw_masks is not None:
+                # Просто переключаем текущие маски
+                if value:
+                    self.state.predictedObjects = self.state.postprocessed_masks
+                else:
+                    self.state.predictedObjects = self.state.raw_masks
+            
+                # Пересчитываем статистику для новых масок
+                if self.state.predictedObjects is not None and self.state.model_config:
+                    from processing import prepareObjectInfo
+                    objects_info, area_stats = prepareObjectInfo(
+                        self.state.predictedObjects, 
+                        self.state.model_config
+                    )
+                    self.update_area_stats(objects_info, area_stats)
+                    self.state.filteredObjects = None
+                    self.apply_filtration()
+                
+                    # Очищаем кэш изображений для обновления визуализации
+                    self._clear_image_cache()
+    
+    def get_apply_postprocessing(self) -> bool:
+        """Возвращает текущий статус постобработки"""
+        return self.state.get("apply_postprocessing", True)
                 
     def update_slider_range(self, param_name: str, min_val: float, max_val: float):
         """Обновление диапазона слайдера"""
@@ -158,7 +206,9 @@ class StateManager:
         self.state.isShowIntermediate = True
         self.state.polygonsCVAT = ""
         self.state.zipBuffer = ""
-        # Очищаем кэш изображений
+        self.state.postprocessed_masks = None
+        self.state.raw_masks = None
+        self.state.probs = None
         self._clear_image_cache()
     
     def get_config(self) -> Optional[ModelConfig]:
@@ -168,6 +218,15 @@ class StateManager:
         self.state.imageName = uploaded_file.name
         self.state.uploadedImage = Image.open(uploaded_file).convert("L")
         self.state.imgWidth, self.state.imgHeight = self.state.uploadedImage.size
+
+        self.state.scaleInfo = None
+        self.state.imgScale = None
+        self.state.scaleText = None
+        self.state.infoLineHeight = None
+        self.state.manual_scale_set = False 
+        self.state.postprocessed_masks = None
+        self.state.raw_masks = None
+        self.state.probs = None
         self.reset_results()
     
     def update_scale(self, scale_data: tuple, auto_scale: float):
@@ -180,6 +239,7 @@ class StateManager:
             if scale_data:
                 self.state.scaleText = f"{scale_data[4]} (μm) / {scale_data[2]} (px) = {auto_scale:.2f}"
                 self.state.infoLineHeight = self.state.imgHeight - scale_data[0]
+                print(f"infoLineHeight: {self.state.infoLineHeight}")
                 print(f"[DEBUG] update_scale: imgScale set to {auto_scale}")
         else:
             if self.state.scaleInfo is None:
@@ -276,20 +336,25 @@ class StateManager:
         pass
     
     def apply_filtration(self):
+        """Применение фильтрации к predictedObjects"""
         if self.state.predictedObjects is not None and self.state.objectsInfo is not None:
             from processing import filtrationObjects
             config = self.get_config()
 
             if not self.state.filtration_params:
                 self._init_dynamic_filtration_settings()
-  
+
             self.state.filteredObjects = filtrationObjects(
                 objectsInfo=self.state.objectsInfo,
                 predictedObjects=self.state.predictedObjects,
                 params=self.state.filtration_params,
                 model_config=config 
             )
-        
+    
             self.state.filteredObjectsInfo = None
             # Очищаем кэш изображений при изменении фильтрации
+            self._clear_image_cache()
+        elif self.state.predictedObjects is not None:
+            self.state.filteredObjects = self.state.predictedObjects.copy()
+            self.state.filteredObjectsInfo = None
             self._clear_image_cache()

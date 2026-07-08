@@ -1,6 +1,6 @@
 # === LIBRARIES GENERAL ===
 import streamlit as st
-
+import numpy as np
 # === PROJECT SCRIPTS ===
 from processing.objects import prepareFilteredObjectInfo
 from processing.statistics import calculateStatistics
@@ -8,7 +8,8 @@ from processing.statistics import calculateStatistics
 from src.converter import makeCVATbackupRLE
 
 from styles import loadStyles, loadFooter
-
+from logger import logger
+       
 from core.stateManager import StateManager
 from core.handlers import AppHandlers
 from core.componentsUI import UIComponents
@@ -22,12 +23,15 @@ handlers = AppHandlers(state_manager)
 ui = UIComponents(state_manager)
 
 # === HEADER ===
+st.header(":red[THIS WEBSITE IS RUNNING IN TEST MODE!]")
+
+# === HEADER ===
 st.header("🧪 Biofilm Analyzer")
 st.markdown("This tool is designed for processing SEM images of biofilms")
 st.markdown('<hr style="margin: 0.5rem 0;">', unsafe_allow_html=True)
 
 # === INTERFACE ===
-blockWorkspace, gap, blockTools = st.columns([2.4, 0.1, 1.2])
+blockWorkspace, gap, blockTools = st.columns([2.3, 0.1, 1.3])
 
 with blockTools:
     tabsTools = st.tabs(["🔬 Segmentation", "📊 Statistics & Import"])
@@ -41,7 +45,6 @@ with blockTools:
         model_selected = ui.render_model_selector_only()
         if model_selected:
             if state_manager.set_model(model_selected):
-                # Очищаем кэш изображений при смене модели
                 ui.clear_image_cache()
     
         # Обработка загрузки файла
@@ -91,6 +94,7 @@ with blockTools:
         if state_manager.state.filteredObjects is None:
             st.info("No results for statistics calculation")
         else:
+
             # Если есть результаты - показываем колонки с фильтрами и статистикой
             filtrationCol, gap, statCol = st.columns([1.5, 0.01, 1.6])
             
@@ -99,8 +103,6 @@ with blockTools:
                 filter_params = ui.render_filtration_ui(filtrationCol)
                 if filter_params:
                     handlers.handle_filtration(filter_params)
-                    # Очищаем кэш при изменении фильтров
-                    ui.clear_image_cache()
             
             with statCol:
                 st.markdown("### 📊 Statistics")

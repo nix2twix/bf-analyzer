@@ -56,14 +56,14 @@ class UIComponents:
                     display_image = st.session_state.image_cache[cache_key]
             
                 # Адаптивное отображение
-                st.image(display_image, caption="Segmentation result", use_container_width=True)
+                st.image(display_image, caption="Segmentation result", width='stretch')
                 return display_image
             else:
                 st.warning("⚠️ No objects found after filtering")
                 st.image(
                     self.state.state.uploadedImage,
                     caption=f"Loaded SEM-image {self.state.state.imageName}",
-                    use_container_width=True
+                    width='stretch'
                 )
                 return None
         else:
@@ -80,7 +80,7 @@ class UIComponents:
             st.image(
                 display_image,
                 caption=f"Loaded SEM-image {self.state.state.imageName}",
-                use_container_width=True
+                width='stretch'
             )
             return None
     
@@ -126,14 +126,15 @@ class UIComponents:
     def render_model_selector_only(self) -> str:
         """Отрисовывает только селектор модели"""
         model_options = {
-            "Bacillus": "🦠 Bacillus",
-            "Coccus": "🧫 Coccus"
+            "Bacillus": "NEW-Bacillus",
+            "Coccus": "OLD-Coccus",
+            "Coccus_no10imgs": "NEW-Coccus_NO10IMGS"
         }
         
         current_model = self.state.state.get("modelType", "Bacillus")
         
         selected_display = st.selectbox(
-            "Choose the type of organisms:",
+            "CHOOSE THE MODEL:",
             options=list(model_options.values()),
             index=list(model_options.keys()).index(current_model),
             key="modelChooser"
@@ -154,7 +155,7 @@ class UIComponents:
             return st.button(
                 "🧪 Start segmentation",
                 disabled=self.state.state.uploadedImage is None,
-                use_container_width=True
+                width='stretch'
             )
     
     def render_annotation_uploader_only(self) -> Optional[Any]:
@@ -173,15 +174,29 @@ class UIComponents:
     
         if config and self.state.state.predictedObjects is not None:
             with container:
-                params = self.factory.create_filtration_ui(config, self.state.state)
             
+                current_value = self.state.state.get("apply_postprocessing", False)
+            
+                postprocessing_toggle = st.toggle(
+                    "Apply morphological postprocessing",
+                    value=current_value,
+                    help="When enabled applies smoothing, hole filling and class filtering.\n"
+                         "When disabled uses raw connected components",
+                    key="postprocessing_toggle"
+                )
+            
+                if postprocessing_toggle != current_value:
+                    self.state.toggle_postprocessing(postprocessing_toggle)
+                    st.rerun()
+
+            
+                params = self.factory.create_filtration_ui(config, self.state.state)
                 if params:
-                    self.state.update_filtration_params_from_ui(params)
                     return params
         return {}
     
     def render_statistics_content(self, container, result_info: Dict, img_area: float):
-        """Отрисовывает контент статистики (без заголовка)"""
+        """Отрисовывает контент статистики"""
         config = self.state.get_config()
         
         if self.state.state.filteredObjects is not None and config and result_info:
@@ -202,7 +217,7 @@ class UIComponents:
                 file_name=f"backup-{datetime.now().strftime('%d-%m-%Y-%H-%M')}.zip",
                 mime="application/zip",
                 disabled=self.state.state.uploadedImage is None or self.state.state.polygonsCVAT is None,
-                use_container_width=True,
+                width='stretch',
                 help="Export masks in CVAT format",
                 key=cvat_key
             )
@@ -214,7 +229,7 @@ class UIComponents:
                 file_name=f"results-{datetime.now().strftime('%Y-%m-%d-%H-%M')}.zip",
                 mime="application/zip",
                 disabled=self.state.state.uploadedImage is None or self.state.state.zipBuffer is None,
-                use_container_width=True,
+                width='stretch',
                 help="Download segmentation results (PNG + Excel)",
                 key=results_key
             )
@@ -256,36 +271,72 @@ class UIComponents:
         """Показывает диалог для ручной установки масштаба"""
         @st.dialog("Set the scale manually")
         def dialog():
+            # Определяем текущее значение для отображения
             if self.state.state.scaleInfo and len(self.state.state.scaleInfo) > 4:
                 current_value = float(self.state.state.scaleInfo[4])
+                is_auto = not self.state.state.get("manual_scale_set", False)
             else:
                 current_value = 10.0
-            
+                is_auto = False
+        
+            # Показываем статус
+            if is_auto:
+                st.info("📏 Currently using auto-detected scale")
+            else:
+                st.info("✏️ Currently using manually set scale")
+        
             manualScaleValue = st.number_input(
                 "Enter the length of scale line (μm):",
                 min_value=0.001,
                 max_value=1000.0,
                 value=current_value,
                 step=0.1,
-                format="%.0f"
+                format="%.0f",
+                key="manual_scale_input"
             )
-            
-            col1, col2 = st.columns(2)
+        
+            col1, col2, col3 = st.columns(3)
+        
             with col1:
-                if st.button("Cancel"):
+                if st.button("Cancel", key="cancel_scale_btn", width='stretch'):
                     st.session_state.show_scale_dialog = False
                     st.rerun()
-            
+        
             with col2:
-                if st.button("Submit"):
+                if st.button("🔄 Reset to Auto", key="reset_scale_btn", width='stretch', 
+                            disabled=not self.state.state.get("manual_scale_set", False)):
+                    self.state.state.manual_scale_set = False
+                    self.state.state.scaleInfo = None
+                    self.state.state.imgScale = None
+        
+                    # Сразу запускаем автоопределение если есть изображение
+                    if self.state.state.uploadedImage is not None:
+                        from src.autoscale import estimateScale
+                        tempArrImg = np.array(self.state.state.uploadedImage, dtype='uint8')
+                        autoScale, scaleData = estimateScale(tempArrImg)
+                        self.state.update_scale(scaleData, autoScale)
+        
+                    # Пересчитываем статистику если есть результаты
+                    if self.state.state.filteredObjects is not None:
+                        self.state.state.filteredObjectsInfo = None
+        
+                    st.session_state.show_scale_dialog = False
+                    st.rerun()
+        
+            with col3:
+                if st.button("Submit", key="submit_scale_btn", width='stretch', type="primary"):
+                    # Применяем новое значение
                     new_scale = manualScaleValue / 1008
-                    
+                
                     self.state.state.imgScale = new_scale
                     self.state.state.scaleText = f"{manualScaleValue} (μm) / {1008} (px) = {new_scale:.4f}"
                     self.state.state.scaleInfo = (0, 0, 1008, 0, manualScaleValue, 0, 0)
                     self.state.state.manual_scale_set = True
-                    
+
+                    if self.state.state.filteredObjects is not None:
+                        self.state.state.filteredObjectsInfo = None
+                
                     st.session_state.show_scale_dialog = False
                     st.rerun()
-        
+    
         dialog()

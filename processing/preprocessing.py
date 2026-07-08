@@ -8,6 +8,7 @@ def cropLineBelow(imgPIL, countPx=120):
     width, height = imgPIL.size
     if (width >= MINIMAGESIZE + countPx) and (height >= MINIMAGESIZE + countPx):
         cropped_img = imgPIL.crop((0, 0, width, height - countPx))
+        print(f"CROPED {countPx} px from below")
         return cropped_img
     else:
         return imgPIL

@@ -39,6 +39,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="app\app.py" />
+    <Compile Include="app\logger.py" />
     <Compile Include="app\styles.py" />
     <Compile Include="app\__init__.py" />
     <Compile Include="core\componentsUI.py" />

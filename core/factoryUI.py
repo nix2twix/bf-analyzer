@@ -9,6 +9,21 @@ class ModelUIFactory:
     """Фабрика для создания UI-элементов специфичных для модели"""
     
     @staticmethod
+    def _on_slider_change(param_name: str, state: Dict):
+        """Callback для обновления параметров сразу при изменении слайдера"""
+        def callback():
+            # Получаем текущее значение слайдера из session_state
+            slider_key = f"slider_{param_name}_{hash(str(state.get('predictedObjects')))}"
+            if slider_key in st.session_state:
+                min_val, max_val = st.session_state[slider_key]
+                if "filtration_params" in state:
+                    state["filtration_params"][param_name] = {
+                        'min': float(min_val),
+                        'max': float(max_val)
+                    }
+        return callback
+    
+    @staticmethod
     def create_filtration_ui(config: ModelConfig, state: Dict) -> Dict:
         """Динамическое создание UI фильтрации на основе конфига"""
         params = {}
@@ -73,8 +88,7 @@ class ModelUIFactory:
                     color = hex_color
                     break
 
-            # Уникальный ключ с timestamp для избежания конфликтов
-            import time
+            # Уникальный ключ
             key = f"slider_{param_name}_{hash(str(state.get('predictedObjects')))}"
 
             # Добавляем CSS правило для цвета
@@ -88,7 +102,7 @@ class ModelUIFactory:
                 }}
             """)
 
-            # Создаем слайдер
+            # Создаем слайдер с callback
             params[param_name] = st.slider(
                 display_name,
                 min_value=float(slider_min),
@@ -96,8 +110,17 @@ class ModelUIFactory:
                 value=(float(current_min), float(current_max)),
                 step=step,
                 key=key, 
-                disabled=state.get("predictedObjects") is None
+                disabled=state.get("predictedObjects") is None,
+                on_change=ModelUIFactory._on_slider_change(param_name, state)
             )
+            
+            # Сразу обновляем состояние из слайдера (на случай если callback не сработал)
+            if key in st.session_state and state.get("predictedObjects") is not None:
+                min_val, max_val = st.session_state[key]
+                state["filtration_params"][param_name] = {
+                    'min': float(min_val),
+                    'max': float(max_val)
+                }
 
         # Применяем стили
         if css_rules:

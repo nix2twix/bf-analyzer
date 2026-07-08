@@ -8,6 +8,7 @@ import zipfile
 
 import numpy as np
 import pandas as pd
+import streamlit as st
 import xml.etree.ElementTree as ET
 
 from PIL import Image
@@ -162,6 +163,7 @@ def updateMaskCVAT(xml_path, width, height, model_config):
 
     return masks
 
+@st.cache_data(show_spinner=False, ttl=6000, max_entries=10) 
 def makeCVATbackupRLE(
     image: Image.Image,
     original_filename: str,
@@ -276,7 +278,7 @@ def makeCVATbackupRLE(
     zip_buffer.seek(0)
     return zip_buffer
 
-
+@st.cache_data(show_spinner=False, ttl=6000, max_entries=10) 
 def makeXMLforCVAT(image_name, image_width, image_height, labels, masks, crop_bottom=120):
     """
     labels: [{"name": str, "color": str}]
@@ -348,6 +350,7 @@ def makeXMLforCVAT(image_name, image_width, image_height, labels, masks, crop_bo
 
     return ET.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
 
+@st.cache_data(show_spinner=False, ttl=6000, max_entries=10) 
 def saveResultsAsZip(filteredObjects, classColors, drawImgPIL, 
                      filteredObjectsInfo=None, scale=None, 
                      imgWidth=None, imgHeight=None, infoLineHeight=None,

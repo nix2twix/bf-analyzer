@@ -1,12 +1,91 @@
 import torch
 import numpy as np
 from torch.utils.data import DataLoader
-from stqdm import stqdm
 import streamlit as st
 from .preprocessing import cropLineBelow, makePatches
-from .postprocessing import postprocessByClassFilters, postprocessByProbs
+from .postprocessing import smoothMask, fillHolesMask, postprocessByProbs, postprocessByClassFilters
 from src.dataset import TestDataset
 from model.model import buildModel, loadCheckpoint
+
+
+def apply_postprocessing_to_masks(processedMask, probs, model_config, threshold=0):
+    """
+    Применяет постобработку к маскам с использованием новых функций
+    """
+    import cv2
+    import numpy as np
+    
+    height, width = None, None
+    for mask in processedMask.values():
+        if mask is not None:
+            height, width = mask.shape
+            break
+    
+    if height is None:
+        return processedMask
+    
+    # Собираем unified mask из нумерованных масок
+    unified_mask = np.zeros((height, width), dtype=np.int32)
+    for class_name, labeled_mask in processedMask.items():
+        if class_name in model_config.class_labels and "background" not in class_name:
+            class_idx = model_config.class_labels[class_name]
+            unified_mask[labeled_mask > 0] = class_idx
+    
+    processed_mask = postprocessByProbs(
+            predMask=unified_mask,
+            probMaps=probs,
+            classLabels=model_config.class_labels
+    )
+    print(f"[INFO] Postprocessed by probabilities")
+    
+    # Шаг 2: Сглаживание и заполнение дыр для финальной маски
+    binMask = (processed_mask > 0).astype(np.uint8)
+    binMask = smoothMask(binMask, morph_kernel=3, morph_iters=3, gauss_kernel=3)
+    binMask = fillHolesMask(binMask, area_thresh=200)
+    
+    # Применяем сглаженную маску
+    processed_mask[binMask == 0] = 0
+    
+    # Шаг 3: Фильтрация по площади и эксцентриситету
+    if hasattr(model_config, 'postprocess_params') and model_config.postprocess_params:
+        processed_mask = postprocessByClassFilters(
+            predMask=processed_mask,
+            probs=probs,
+            classLabels=model_config.class_labels,
+            postprocess_params=model_config.postprocess_params,
+            prob_threshold=threshold
+        )
+        print(f"[INFO] Postprocessed by class filters applied")
+    
+    # Конвертируем обратно в словарь нумерованных масок
+    current_processed_masks = {}
+    for name, class_idx in model_config.class_labels.items():
+        if "background" in name or name == "bg":
+            continue
+        binary_mask = (processed_mask == class_idx).astype(np.uint8)
+        _, labeled = cv2.connectedComponents(binary_mask, connectivity=8)
+        current_processed_masks[name] = labeled
+    
+    return current_processed_masks
+
+
+def simple_labeling(processedMask, model_config):
+    """Только нумерация объектов без постобработки"""
+    import cv2
+    import numpy as np
+    
+    labeled_masks = {}
+    for class_name, mask in processedMask.items():
+        if "background" in class_name or class_name == "bg":
+            labeled_masks[class_name] = np.zeros_like(mask, dtype=np.uint32)
+            continue
+        
+        binary_mask = (mask > 0).astype(np.uint8)
+        _, labeled = cv2.connectedComponents(binary_mask, connectivity=8)
+        labeled_masks[class_name] = labeled.astype(np.uint32)
+    
+    return labeled_masks
+
 
 @st.cache_data(show_spinner=False, ttl=6000, max_entries=10) 
 def segmentationImage(
@@ -16,26 +95,19 @@ def segmentationImage(
     height, 
     imgName,
     model_config,
-    threshold=0.5
+    threshold=0
 ):
     """
-    Универсальная функция сегментации для любой модели
-    
-    Args:
-        uploaded_file: загруженное изображение (PIL Image)
-        INFLINEPX: высота информационной строки для обрезки
-        width: ширина исходного изображения
-        height: высота исходного изображения
-        imgName: имя изображения
-        model_config: конфигурация модели (ModelConfig)
-        threshold: порог уверенности
+    Универсальная функция сегментации для любой модели.
+    Возвращает оба варианта: с постобработкой и без.
     
     Returns:
-        predictedLabels: словарь нумерованных масок для каждого класса (каждый объект имеет уникальный ID в пределах класса)
+        postprocessed_masks: словарь нумерованных масок с постобработкой
+        raw_masks: словарь нумерованных масок без постобработки
         probs: словарь карт вероятностей для каждого класса
     """
     import cv2
-    from skimage.measure import label as skimage_label
+    import time
     
     origImg = uploaded_file
     
@@ -58,7 +130,7 @@ def segmentationImage(
     print(f"[INFO] MODEL: {model_config.display_name}")
     print(f"[INFO] CLASSES: {model_config.class_names}")
 
-    # Загрузка модели из конфига
+    # Загрузка модели
     model = buildModel(
         classesCount=model_config.num_classes,
         encoderName=model_config.encoder_name,
@@ -78,26 +150,54 @@ def segmentationImage(
              for name in model_config.class_names}
     count = np.zeros((croppedH, croppedW), dtype=np.float32)
 
-    # Инференс
+    # Прогресс-бар
+    total_patches = len(test_loader)
+    progress_container = st.container()
+    with progress_container:
+        progress_bar = st.progress(0, text="Preparing for inference...")
+        time_text = st.empty()
+    
+    start_time = time.time()
+    
     with torch.no_grad():
-        for images, patch_info in stqdm(test_loader, desc="Processing patches"):
+        for idx, (images, patch_info) in enumerate(test_loader):
+            progress = (idx + 1) / total_patches
+            elapsed = time.time() - start_time
+            
+            if idx > 0:
+                avg_time_per_patch = elapsed / (idx + 1)
+                remaining = avg_time_per_patch * (total_patches - idx - 1)
+                eta_minutes = int(remaining // 60)
+                eta_seconds = int(remaining % 60)
+                eta_text = f" | Wait for... {eta_minutes}m {eta_seconds}s"
+            else:
+                eta_text = ""
+            
+            progress_bar.progress(progress, text=f"Processing patch {idx + 1}/{total_patches}")
+            
+            if idx > 0:
+                time_text.caption(f"⏱️ Elapsed: {elapsed:.1f}s | Speed: {avg_time_per_patch:.1f}s/patch")
+            else:
+                time_text.caption("⏱️ Starting inference...")
+            
             images = images.to(device)
             outputs = torch.softmax(model(images), dim=1).cpu()
 
-            for idx in range(images.size(0)):
+            for img_idx in range(images.size(0)):
                 x = patch_info[0].item()
                 y = patch_info[1].item()
 
                 for classIdx, name in enumerate(model_config.class_names):
-                    prob = outputs[idx, classIdx].numpy()
+                    prob = outputs[img_idx, classIdx].numpy()
                     h_out, w_out = prob.shape  
-
                     probs[name][y:y+h_out, x:x+w_out] += prob 
 
                 count[y:y+h_out, x:x+w_out] += 1
-        
+    
+    progress_container.empty()
+    
     # Нормализация вероятностей
-    count += 1e-9  # избегаем деления на ноль
+    count += 1e-9
     for name in probs:
         probs[name] /= count
  
@@ -105,81 +205,37 @@ def segmentationImage(
     stackedProbs = np.stack([probs[name] for name in model_config.class_names], axis=-1)   
     maxProbs = np.max(stackedProbs, axis=-1)
     predMask = np.argmax(stackedProbs, axis=-1)
-    predMask[maxProbs < threshold] = 0  # применяем порог
+    predMask[maxProbs < threshold] = 0
 
-    # Инициализация итоговой маски
-    current_mask = predMask.copy()
+    # Преобразуем predMask в словарь бинарных масок
+    binary_masks = {}
+    for i, name in enumerate(model_config.class_names):
+        binary_masks[name] = (predMask == i).astype(np.uint8)
     
-    # Шаг 1: Постобработка по вероятностям с весами классов
-    if hasattr(model_config, 'class_weights') and model_config.class_weights:
-        from .postprocessing import postprocessByProbs
-        
-        # Преобразуем predMask в словарь бинарных масок для postprocessByProbs
-        binary_masks = {}
-        for i, name in enumerate(model_config.class_names):
-            binary_masks[name] = (current_mask == i).astype(np.uint8)
-        
-        processed_masks, all_objects = postprocessByProbs(
-            predMasks=binary_masks,
-            probMaps=probs,
-            classLabels=model_config.class_labels,
-            class_weights=model_config.class_weights
-        )
-        current_processed_masks = processed_masks
-        print(f"[INFO] Postprocessed by probabilities: {len(all_objects)} objects detected")
-    else:
-        # Если нет постобработки по вероятностям, создаем нумерованные маски из predMask
-        current_processed_masks = {}
-        for name, class_idx in model_config.class_labels.items():
-            if "background" in name or name == "bg":
-                continue
-            binary_mask = (current_mask == class_idx).astype(np.uint8)
-            _, labeled = cv2.connectedComponents(binary_mask, connectivity=8)
-            current_processed_masks[name] = labeled
+    # Получаем оба варианта: с постобработкой и без
+    print("[INFO] Generating raw masks (no postprocessing)...")
+    raw_masks = simple_labeling(binary_masks, model_config)
     
-    # Шаг 2: Фильтрация по площади и эксцентриситету
-    if hasattr(model_config, 'postprocess_params') and model_config.postprocess_params:
-        # Конвертируем нумерованные маски в единую для postprocessByClassFilters
-        unified_mask = np.zeros((croppedH, croppedW), dtype=np.int32)
-        for name, labeled_mask in current_processed_masks.items():
-            if name in model_config.class_labels:
-                class_idx = model_config.class_labels[name]
-                unified_mask[labeled_mask > 0] = class_idx
-        
-        # Применяем фильтрацию
-        unified_mask = postprocessByClassFilters(
-            predMask=unified_mask,
-            probs=probs,
-            classLabels=model_config.class_labels,
-            postprocess_params=model_config.postprocess_params,
-            prob_threshold=threshold
-        )
-        
-        # Конвертируем обратно в нумерованные маски
-        current_processed_masks = {}
-        for name, class_idx in model_config.class_labels.items():
-            if "background" in name or name == "bg":
-                continue
-            binary_mask = (unified_mask == class_idx).astype(np.uint8)
-            _, labeled = cv2.connectedComponents(binary_mask, connectivity=8)
-            current_processed_masks[name] = labeled
-        
-        print(f"[INFO] Postprocessed by class filters applied")
+    print("[INFO] Generating postprocessed masks...")
+    postprocessed_masks = apply_postprocessing_to_masks(binary_masks, probs, model_config, threshold)
     
     # Формирование итоговых нумерованных масок для каждого класса
-    predictedLabels = {}
+    def expand_to_full_size(masks_dict):
+        """Расширяет маски до исходного размера"""
+        full_masks = {}
+        for name, labeled_mask in masks_dict.items():
+            mask_full = np.zeros((height, width), dtype=np.uint32)
+            mask_full[:croppedH, :croppedW] = labeled_mask
+            full_masks[name] = mask_full
+        # Добавляем фон
+        for name in model_config.class_labels.keys():
+            if "background" in name or name == "bg":
+                full_masks[name] = np.zeros((height, width), dtype=np.uint32)
+                break
+        return full_masks
     
-    # Добавляем обработанные классы
-    for name, labeled_mask in current_processed_masks.items():
-        mask_full = np.zeros((height, width), dtype=np.uint32)
-        mask_full[:croppedH, :croppedW] = labeled_mask
-        predictedLabels[name] = mask_full
-    
-    # Добавляем фон
-    for name in model_config.class_labels.keys():
-        if "background" in name or name == "bg":
-            predictedLabels[name] = np.zeros((height, width), dtype=np.uint32)
-            break
+    raw_masks_full = expand_to_full_size(raw_masks)
+    postprocessed_masks_full = expand_to_full_size(postprocessed_masks)
     
     print(f"[INFO] PROCESSING {imgName} DONE!")
-    return predictedLabels, probs
+    return postprocessed_masks_full, raw_masks_full, probs

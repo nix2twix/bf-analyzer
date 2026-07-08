@@ -54,8 +54,8 @@ BACILLUS_CONFIG = ModelConfig(
     class_labels={"bg": 0, "biofilm": 1, "intermediate": 2, "single": 3},
     postprocess_params={
         "single": {
-            "area": (350, 15000),
-            "ecc": (0.65, 1.0)
+            "area": (150, 20000),
+            "ecc": (0.35, 1.0)
         },
         "biofilm": {
             "area": (3000, 4587520)
@@ -85,10 +85,95 @@ BACILLUS_CONFIG = ModelConfig(
         "Microorganisms": "#b83df5",
         "Biofilm": "#24b353",
         "intermediate-stage": "#ddff33",
-        "Defect": "#ff0000"  # добавим стандартный Defect
+        "Defect": "#ff0000"  
     }
 )
+COCCUS_NO10IMGS_CONFIG = ModelConfig(
+    name="Coccus_no10imgs",
+    display_name="Coccus_no10imgs",
+    class_names=["background", "biofilm", "planktonic"],
+    num_classes=3,
+    class_colors={
+        "biofilm": (18, 225, 249, 178),
+        "planktonic": (14, 101, 235, 178)
+    },
+    checkpoint_path=os.path.join(MODELS_DIR, "coccus_no10imgs_epoch500.pth"),
+    class_labels={"background": 0, "biofilm": 1, "planktonic": 2},
+    postprocess_params={
+        "biofilm": {
+            "area": (100, 4587520)
+        },
+        "planktonic": {
+            "area": (100, 4587520)
+        }
+    },
+    filtration_params={
+        "biofilm_area": (100, 100000),
+        "planktonic_area": (100, 100000)
+    },
+    class_titles={
+        "biofilm": ("Biofilms", "#12e1f9"),
+        "planktonic": ("Planktonic", "#0e65eb")
+    },
+    class_weights={
+        "background": 0.1,
+        "biofilm": 1.0,
+        "planktonic": 10.0
+    },
 
+    cvat_labels={
+        "biofilm": "Biofilm",
+        "planktonic": "Planktonic"
+    },
+    cvat_label_colors={
+        "Biofilm": "#12e1f9",
+        "Planktonic": "#0e65eb",
+        "Defect": "#ff0000"
+    }
+)
+COCCUS_AUGMENTED_CONFIG = ModelConfig(
+    name="Coccus_augmented",
+    display_name="Coccus_augmented",
+    class_names=["background", "biofilm", "planktonic"],
+    num_classes=3,
+    class_colors={
+        "biofilm": (18, 225, 249, 178),
+        "planktonic": (14, 101, 235, 178)
+    },
+    checkpoint_path=os.path.join(MODELS_DIR, "coccus_augmented.pth"),
+    class_labels={"background": 0, "biofilm": 1, "planktonic": 2},
+    postprocess_params={
+        "biofilm": {
+            "area": (100, 4587520)
+        },
+        "planktonic": {
+            "area": (100, 4587520)
+        }
+    },
+    filtration_params={
+        "biofilm_area": (100, 100000),
+        "planktonic_area": (100, 100000)
+    },
+    class_titles={
+        "biofilm": ("Biofilms", "#12e1f9"),
+        "planktonic": ("Planktonic", "#0e65eb")
+    },
+    class_weights={
+        "background": 0.1,
+        "biofilm": 1.0,
+        "planktonic": 10.0
+    },
+
+    cvat_labels={
+        "biofilm": "Biofilm",
+        "planktonic": "Planktonic"
+    },
+    cvat_label_colors={
+        "Biofilm": "#12e1f9",
+        "Planktonic": "#0e65eb",
+        "Defect": "#ff0000"
+    }
+)
 COCCUS_CONFIG = ModelConfig(
     name="Coccus",
     display_name="🧫 Coccus",
@@ -102,15 +187,15 @@ COCCUS_CONFIG = ModelConfig(
     class_labels={"background": 0, "biofilm": 1, "planktonic": 2},
     postprocess_params={
         "biofilm": {
-            "area": (14000, 4587520)
+            "area": (100, 4587520)
         },
         "planktonic": {
-            "area": (300, 14000)
+            "area": (100, 4587520)
         }
     },
     filtration_params={
         "biofilm_area": (100, 100000),
-        "planktonic_area": (100, 20000)
+        "planktonic_area": (100, 100000)
     },
     class_titles={
         "biofilm": ("Biofilms", "#12e1f9"),
@@ -217,5 +302,6 @@ COMBINED_CONFIG = ModelConfig(
 MODEL_CONFIGS = {
     "Bacillus": BACILLUS_CONFIG,
     "Coccus": COCCUS_CONFIG,
-    "Combined": COMBINED_CONFIG
+    "Coccus_augmented": COCCUS_AUGMENTED_CONFIG,
+    "Coccus_no10imgs": COCCUS_NO10IMGS_CONFIG
 }

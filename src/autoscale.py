@@ -1,8 +1,13 @@
 import numpy as np
-import easyocr
 import re
-
 import streamlit as st
+
+
+@st.cache_resource
+def get_ocr_reader():
+    import easyocr
+    reader = easyocr.Reader(["en"], gpu=False, verbose=False)
+    return reader
 
 def normalizeScaleBar(c_fullImage, lowerBound = None, bright_threshold=240):
     if lowerBound is None:
@@ -48,8 +53,8 @@ def scaleLength(c_fullImage, start_y):
 
 
 def findText(c_footnoteImage):
-    reader = easyocr.Reader(["en"], gpu = False, verbose = False)
-    result = reader.readtext(c_footnoteImage, detail = 0, blocklist = 'SOo')
+    reader = get_ocr_reader() 
+    result = reader.readtext(c_footnoteImage, detail=0, blocklist='SOo')
     return ' '.join(result).lower()  
 
 def increase(c_text):

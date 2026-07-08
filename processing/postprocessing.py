@@ -2,8 +2,10 @@ import cv2
 import numpy as np
 from skimage.measure import regionprops, label
 from skimage import morphology
+from PIL import Image
 
-def smoothMaskFull(mask, morph_kernel=5, morph_iters=2, gauss_kernel=7):
+
+def smoothMask(mask, morph_kernel=3, morph_iters=1, gauss_kernel=3):
     """Сглаживание маски морфологическими операциями и гауссом"""
     mask_uint8 = (mask > 0).astype(np.uint8)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (morph_kernel, morph_kernel))
@@ -13,8 +15,11 @@ def smoothMaskFull(mask, morph_kernel=5, morph_iters=2, gauss_kernel=7):
         morph = cv2.morphologyEx(morph, cv2.MORPH_OPEN, kernel)
     morph_float = morph.astype(np.float32)
     blurred = cv2.GaussianBlur(morph_float, (gauss_kernel, gauss_kernel), 0)
-    smoothed = (blurred > 0.5).astype(np.uint8)
+    smoothed = (blurred > 0.9).astype(np.uint8)  # 0.9 для более агрессивного объединения
     return smoothed
+
+# Алиас для обратной совместимости
+smoothMaskFull = smoothMask
 
 def fillHolesMask(mask, area_thresh=200):
     """Заполнение маленьких дырок в маске"""
@@ -22,90 +27,71 @@ def fillHolesMask(mask, area_thresh=200):
     filled = morphology.remove_small_holes(mask_bool, area_threshold=area_thresh)
     return filled.astype(np.uint8)
 
-def postprocessByProbs(predMasks, probMaps, classLabels, class_weights=None):
+def postprocessByProbs(predMask, probMaps, classLabels, class_weights=None):
     """
     Постобработка с учетом вероятностей и весов классов
+    class_weights: словарь весов для классов {название_класса: вес}
     """
-    first_mask = next(iter(predMasks.values()))
-    h, w = first_mask.shape
+    if class_weights is None:
+        class_weights = {class_name: 1.0 for class_name in classLabels.keys()}
     
-    # Обрабатываем каждый класс отдельно
-    processedMask = {label: np.zeros((h, w), dtype=np.int32) for label in classLabels}
-    all_objects = []
-    next_id = 1
+    # Бинарная маска для сглаживаемых классов
+    smooth_classes = [v for k, v in classLabels.items() if k not in ["bg", "background"]]
+    binMask = np.isin(predMask, smooth_classes).astype(np.uint8)
+    #binMaskImg = Image.fromarray(binMask * 255)
+    #binMaskImg.show() 
+
+    binMask = smoothMask(binMask, morph_kernel=5, morph_iters=4, gauss_kernel=5) 
+    binMask = fillHolesMask(binMask, area_thresh=300)
     
-    # Определяем классы фона
-    bg_labels = [name for name in classLabels.keys() 
-                 if "background" in name or name == "bg"]
+    #binMaskImg = Image.fromarray((binMask * 255).astype(np.uint8))
+    #binMaskImg.show()
+
+    binMaskLabeled = label(binMask)
+    regions = regionprops(binMaskLabeled)
     
-    # Для каждого не-фонового класса
-    for classLabel in classLabels:
-        if classLabel in bg_labels:
+    binObjectsInfo = []
+    for region in regions:
+        objData = {
+            'id': region.label,
+            'class': None,
+            'area': region.area,
+            'eccentricity': region.eccentricity,
+            'bbox': region.bbox,
+            'coords': region.coords,
+            'probsCoefs': {label: 0 for label in classLabels.keys()}
+        }
+        binObjectsInfo.append(objData)
+    
+    processedMask = np.zeros_like(predMask, dtype=np.uint8)
+    
+    for objData in binObjectsInfo:
+        if objData['area'] < 200:
+            coords = objData['coords']
+            processedMask[coords[:, 0], coords[:, 1]] = 0
             continue
             
-        # Бинарная маска для этого класса
-        class_mask = predMasks.get(classLabel, 0) > 0
-        if not np.any(class_mask):
-            continue
-            
-        # Сглаживаем маску класса
-        smoothed_mask = fillHolesMask(class_mask.astype(np.uint8), area_thresh=30)
-        smoothed_mask = smoothMaskFull(smoothed_mask, morph_kernel=5, morph_iters=3, gauss_kernel=7)
+        min_row, min_col, max_row, max_col = objData['bbox']
+        objBbox = (binMaskLabeled[min_row:max_row, min_col:max_col] == objData['id'])
+        for class_name in classLabels.keys():
+            if class_name in probMaps:
+                probBbox = probMaps[class_name][min_row:max_row, min_col:max_col]
+                objProbs = probBbox[objBbox]
+                objData['probsCoefs'][class_name] = np.mean(objProbs) if len(objProbs) > 0 else 0
         
-        # Выделяем отдельные объекты в этом классе
-        labeled_mask = label(smoothed_mask)
-        regions = regionprops(labeled_mask)
+        weighted_probs = {}
+        for class_name, prob in objData['probsCoefs'].items():
+            weight = class_weights.get(class_name, 1.0)
+            weighted_probs[class_name] = prob * weight
+
+        bestClass = max(weighted_probs, key=weighted_probs.get)
+        objData['class'] = bestClass
         
-        #print(f"\n[DEBUG] postprocessByProbs: class {classLabel} has {len(regions)} regions")
-        
-        for region in regions:
-            objData = {
-                'id': next_id,
-                'class': classLabel,
-                'area': region.area,
-                'eccentricity': region.eccentricity,
-                'bbox': region.bbox,
-                'coords': region.coords,
-                'probsCoefs': {label: 0 for label in classLabels}
-            }
-            
-            # Вычисляем вероятности для объекта
-            min_row, min_col, max_row, max_col = region.bbox
-            objBbox = (labeled_mask[min_row:max_row, min_col:max_col] == region.label)
-            
-            for classLabel2 in classLabels:
-                if classLabel2 in probMaps:
-                    probBbox = probMaps[classLabel2][min_row:max_row, min_col:max_col]
-                    obj_pixels = probBbox[objBbox]
-                    if len(obj_pixels) > 0:
-                        objData['probsCoefs'][classLabel2] = np.mean(obj_pixels)
-            
-            # Применяем веса если есть
-            if class_weights:
-                weighted_probs = {}
-                for cls, prob in objData['probsCoefs'].items():
-                    weight = class_weights.get(cls, 1.0)
-                    weighted_probs[cls] = prob * weight
-                bestClass = max(weighted_probs, key=weighted_probs.get)
-            else:
-                bestClass = max(objData['probsCoefs'], key=objData['probsCoefs'].get)
-            
-            objData['class'] = bestClass
-            all_objects.append(objData)
-            
-            # Записываем в маску
-            processedMask[bestClass][region.coords[:, 0], region.coords[:, 1]] = next_id
-            
-            next_id += 1
+        coords = objData['coords']
+        processedMask[coords[:, 0], coords[:, 1]] = classLabels[bestClass]
     
-    # Выводим статистику
-    class_counts = {}
-    for objData in all_objects:
-        class_counts[objData['class']] = class_counts.get(objData['class'], 0) + 1
-    #print(f"[DEBUG] postprocessByProbs: objects per class: {class_counts}")
-    #print(f"[DEBUG] postprocessByProbs: total objects: {len(all_objects)}")
-    
-    return processedMask, all_objects
+    return processedMask
+
 
 def postprocessByClassFilters(
     predMask,
@@ -116,24 +102,16 @@ def postprocessByClassFilters(
 ):
     """
     Постобработка с фильтрацией по площади и эксцентриситету
-    
-    Args:
-        predMask: исходная маска предсказаний (H, W)
-        probs: словарь карт вероятностей для каждого класса
-        classLabels: словарь имя_класса -> индекс
-        postprocess_params: словарь с параметрами фильтрации для каждого класса
-        prob_threshold: порог уверенности для переклассификации
-    
-    Returns:
-        updatedMask: обновленная маска с учетом фильтров
     """
     updatedMask = predMask.copy()
-    
-    for class_name, class_idx in classLabels.items():
+    classIdxList = list(classLabels.values())
+
+    for classIdx in classIdxList:
+        class_name = [k for k, v in classLabels.items() if v == classIdx][0]
         if "background" in class_name or class_name == "bg":
             continue
             
-        binaryMask = (updatedMask == class_idx)
+        binaryMask = (updatedMask == classIdx)
         if np.count_nonzero(binaryMask) == 0:
             continue
 
@@ -177,7 +155,6 @@ def postprocessByClassFilters(
 
                 candidate_name = [k for k, v in classLabels.items() if v == candidate_class][0]
 
-                # Проверяем фильтры кандидата
                 passes_candidate = True
                 
                 if postprocess_params and candidate_name in postprocess_params:
@@ -199,7 +176,6 @@ def postprocessByClassFilters(
                     break
 
             if not assigned:
-                # Присваиваем фон
                 bg_idx = classLabels.get("background", classLabels.get("bg", 0))
                 updatedMask[obj_mask] = bg_idx
 
