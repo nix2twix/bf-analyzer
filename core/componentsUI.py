@@ -117,8 +117,8 @@ class UIComponents:
     
     def render_file_uploader_only(self):
         """Отрисовывает только загрузчик файла"""
-        return st.file_uploader(
-            "⬇️ Upload SEM-image", 
+        return st.file_uploader(label="",
+            help="⬇️ Upload SEM-image", 
             type=["bmp", "png", "jpg", "jpeg"], 
             key="uploader"
         )
@@ -133,7 +133,7 @@ class UIComponents:
         current_model = self.state.state.get("modelType", "Bacillus")
         
         selected_display = st.selectbox(
-            "CHOOSE THE MODEL:",
+            "Type of microorganisms:",
             options=list(model_options.values()),
             index=list(model_options.keys()).index(current_model),
             key="modelChooser"

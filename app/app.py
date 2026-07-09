@@ -1,6 +1,12 @@
 # === LIBRARIES GENERAL ===
-import streamlit as st
+import os
+import sys
+
 import numpy as np
+import streamlit as st
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # === PROJECT SCRIPTS ===
 from processing.objects import prepareFilteredObjectInfo
 from processing.statistics import calculateStatistics
