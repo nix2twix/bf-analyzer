@@ -46,7 +46,8 @@ class AppHandlers:
             # Определяем масштаб сразу после загрузки
             self.handle_scale_detection()
         else:
-            logger.log("FILE_UPLOAD", f"File '{uploaded_file.name}' already loaded, skipping", "DEBUG")
+            pass
+            #logger.log("FILE_UPLOAD", f"File '{uploaded_file.name}' already loaded, skipping", "DEBUG")
     
     def _handle_image_padding(self):
         """Обработка паддинга изображения"""
@@ -69,11 +70,11 @@ class AppHandlers:
         
         # Пропускаем, если масштаб установлен вручную и не force
         if not force and self.state.state.get("manual_scale_set", False):
-            logger.log("SCALE_DETECTION", f"image='{filename}', skipped (manual scale set)", "DEBUG")
+            #logger.log("SCALE_DETECTION", f"image='{filename}', skipped (manual scale set)", "DEBUG")
             return False
     
         if self.state.state.uploadedImage is not None:
-            logger.log("SCALE_DETECTION", f"image='{filename}', attempting auto-detection...", "DEBUG")
+            #logger.log("SCALE_DETECTION", f"image='{filename}', attempting auto-detection...", "DEBUG")
             
             tempArrImg = np.array(self.state.state.uploadedImage, dtype='uint8')
             autoScale, scaleData = estimateScale(tempArrImg)
@@ -264,23 +265,24 @@ class AppHandlers:
     
     def handle_filtration(self, filter_params=None):
         """Обработка фильтрации"""
-        filename = self.state.state.imageName
+        #filename = self.state.state.imageName
         
         if self.state.state.predictedObjects is not None:
             if filter_params:
-                logger.log("FILTRATION", f"image='{filename}', updating filtration params from UI", "DEBUG")
+                #logger.log("FILTRATION", f"image='{filename}', updating filtration params from UI", "DEBUG")
                 self.state.update_filtration_params_from_ui(filter_params)
             self.state.apply_filtration()
-            logger.log("FILTRATION", f"image='{filename}', filtration applied", "INFO")
+            #logger.log("FILTRATION", f"image='{filename}', filtration applied", "INFO")
         else:
-            logger.log("FILTRATION", f"image='{filename}', no predicted objects, skipping", "WARNING")
+            pass
+            #logger.log("FILTRATION", f"image='{filename}', no predicted objects, skipping", "WARNING")
     
     def prepare_export_data(self, processed_image, result_info):
         """Подготовка данных для экспорта"""
-        filename = self.state.state.imageName
+        #filename = self.state.state.imageName
         
         if self.state.state.filteredObjects is not None:
-            logger.log("EXPORT_PREPARE", f"image='{filename}', preparing CVAT backup...", "DEBUG")
+            #logger.log("EXPORT_PREPARE", f"image='{filename}', preparing CVAT backup...", "DEBUG")
             
             self.state.state.polygonsCVAT = makeCVATbackupRLE(
                 self.state.state.uploadedImage,
@@ -292,11 +294,11 @@ class AppHandlers:
             )
             
             # Логируем размер CVAT backup
-            if self.state.state.polygonsCVAT:
-                cvat_size = len(self.state.state.polygonsCVAT.getvalue()) / 1024
-                logger.log_export(filename, "CVAT_backup", cvat_size)
+            #if self.state.state.polygonsCVAT:
+                #cvat_size = len(self.state.state.polygonsCVAT.getvalue()) / 1024
+                #logger.log_export(filename, "CVAT_backup", cvat_size)
             
-            logger.log("EXPORT_PREPARE", f"image='{filename}', preparing Results zip...", "DEBUG")
+            #logger.log("EXPORT_PREPARE", f"image='{filename}', preparing Results zip...", "DEBUG")
             
             self.state.state.zipBuffer = saveResultsAsZip(
                 filteredObjects=self.state.state.filteredObjects,
@@ -314,10 +316,11 @@ class AppHandlers:
             )
             
             # Логируем размер Results
-            if self.state.state.zipBuffer:
-                results_size = len(self.state.state.zipBuffer.getvalue()) / 1024
-                logger.log_export(filename, "Results", results_size)
+            #if self.state.state.zipBuffer:
+                #results_size = len(self.state.state.zipBuffer.getvalue()) / 1024
+                #logger.log_export(filename, "Results", results_size)
                 
-            logger.log("EXPORT_PREPARE", f"image='{filename}', export data ready", "INFO")
+            #logger.log("EXPORT_PREPARE", f"image='{filename}', export data ready", "INFO")
         else:
-            logger.log("EXPORT_PREPARE", f"image='{filename}', no filtered objects, skipping", "WARNING")
+            pass
+            #logger.log("EXPORT_PREPARE", f"image='{filename}', no filtered objects, skipping", "WARNING")

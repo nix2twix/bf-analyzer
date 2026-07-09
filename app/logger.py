@@ -7,7 +7,8 @@ class AppLogger:
     """Класс для логирования действий приложения"""
     
     def __init__(self):
-        self.log_file = "app_logs.txt"
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.log_file = f"logs/log_{timestamp}.txt"
         # Создаем файл логов если его нет, с UTF-8 кодировкой
         if not os.path.exists(self.log_file):
             with open(self.log_file, 'w', encoding='utf-8') as f:

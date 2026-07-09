@@ -118,7 +118,7 @@ def segmentationImage(
     # Фрагментирование с шагом stride
     if height > 512 and width > 512:
         imgPatches, patchesInfo = makePatches(
-            croppedImg, patch_size=(512, 512), stride=(128, 128)
+            croppedImg, patch_size=(512, 512), stride=(256, 256)
         )
     else:
         imgPatches = [croppedImg]
