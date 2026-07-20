@@ -17,7 +17,6 @@ class AppLogger:
     def _safe_encode(self, text):
         """Безопасное кодирование текста для Windows консоли"""
         try:
-            # Пытаемся закодировать в cp1251, заменяя неподдерживаемые символы
             return text.encode('cp1251', errors='replace').decode('cp1251')
         except:
             return text.encode('ascii', errors='replace').decode('ascii')
