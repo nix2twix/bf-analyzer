@@ -9,7 +9,7 @@ __pycache__/
 *.pyc
 
 *.bmp
-.streamlit/
+#.streamlit/
 userGuide/
 
 # User-specific files
