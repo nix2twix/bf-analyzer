@@ -183,7 +183,7 @@ COCCUS_CONFIG = ModelConfig(
         "biofilm": (18, 225, 249, 178),
         "planktonic": (14, 101, 235, 178)
     },
-    checkpoint_path=os.path.join(MODELS_DIR, "coccus_augmented.pth"),
+    checkpoint_path=os.path.join(MODELS_DIR, "coccus.pth"),
     class_labels={"background": 0, "biofilm": 1, "planktonic": 2},
     postprocess_params={
         "biofilm": {
