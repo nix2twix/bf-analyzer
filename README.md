@@ -38,7 +38,7 @@ Activate it (Windows)
 .venv\Scripts\activate
 ```
 
-Linux
+Activate it (Linux)
 
 ```bash
 source .venv/bin/activate
@@ -58,21 +58,9 @@ Run the application
 streamlit run app.py
 ```
 
-The application will become available at
-
-```
-http://localhost:8501
-```
-
-
-## Workflow
-
-1. Upload an SEM image.
-2. Select the bacterial morphology model.
-3. Run segmentation.
-4. Adjust morphometric filters.
-5. Review statistics.
-6. Export the processed results or CVAT annotations.
+The application will become available at http://localhost:8501. 
+You can check the extra/userGuide if you need more information.
+Also extra/examples you can find some test SEM-images, more are available [here](https://disk.yandex.ru/d/sp1UwEoEBgbyCw).
 
 ## Citation
 
