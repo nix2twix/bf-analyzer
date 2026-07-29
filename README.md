@@ -60,7 +60,7 @@ streamlit run app.py
 
 The application will become available at http://localhost:8501. 
 You can check the extra/userGuide if you need more information.
-Also extra/examples you can find some test SEM-images, more are available [here](https://disk.yandex.ru/d/sp1UwEoEBgbyCw).
+Also in extra/examples you can find some test SEM-images, more are available [here](https://disk.yandex.ru/d/sp1UwEoEBgbyCw).
 
 ## Citation
 
