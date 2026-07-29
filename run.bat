@@ -95,12 +95,12 @@ echo.
 echo [INFO] Starting Streamlit server on http://localhost:8501
 echo.
 
-python -m streamlit run app/app.py --server.address=localhost --server.port=8501
+python -m streamlit run app.py --server.address=localhost --server.port=8501
 
 if errorlevel 1 (
     echo.
     echo [WARNING] First launch attempt failed, trying alternative method...
-    streamlit run app/app.py --server.address=localhost --server.port=8501
+    streamlit run app.py --server.address=localhost --server.port=8501
 )
 
 if errorlevel 1 (
@@ -114,7 +114,7 @@ if errorlevel 1 (
     echo 2. Run: call "%VENV_DIR%\Scripts\activate.bat"
     echo 3. Run: cd /d "%CURRENT_DIR%"
     echo 4. Run: set PYTHONPATH=%CURRENT_DIR%
-    echo 5. Run: streamlit run app/app.py
+    echo 5. Run: streamlit run app.py
     echo ========================================
 )
 

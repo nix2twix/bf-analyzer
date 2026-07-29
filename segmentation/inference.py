@@ -1,14 +1,20 @@
 import torch
 import numpy as np
-from torch.utils.data import DataLoader
 import streamlit as st
+
+from torch.utils.data import DataLoader
 from .preprocessing import cropLineBelow, makePatches
-from .postprocessing import smoothMask, fillHolesMask, postprocessByProbs, postprocessByClassFilters
-from src.dataset import TestDataset
-from model.model import buildModel, loadCheckpoint
+from .postprocessing import (
+    smoothMask, 
+    fillHolesMask, 
+    postprocessByProbs, 
+    postprocessByClassFilters
+)
+from utils.dataset import TestDataset
+from models.model import buildModel, loadCheckpoint
 
 
-def apply_postprocessing_to_masks(processedMask, probs, model_config, threshold=0):
+def apply_postsegmentation_to_masks(processedMask, probs, model_config, threshold=0):
     """
     Применяет постобработку к маскам с использованием новых функций
     """
@@ -55,7 +61,6 @@ def apply_postprocessing_to_masks(processedMask, probs, model_config, threshold=
             postprocess_params=model_config.postprocess_params,
             prob_threshold=threshold
         )
-        print(f"[INFO] Postprocessed by class filters applied")
     
     # Конвертируем обратно в словарь нумерованных масок
     current_processed_masks = {}
@@ -69,7 +74,7 @@ def apply_postprocessing_to_masks(processedMask, probs, model_config, threshold=
     return current_processed_masks
 
 
-def simple_labeling(processedMask, model_config):
+def simple_labeling(processedMask):
     """Только нумерация объектов без постобработки"""
     import cv2
     import numpy as np
@@ -106,7 +111,6 @@ def segmentationImage(
         raw_masks: словарь нумерованных масок без постобработки
         probs: словарь карт вероятностей для каждого класса
     """
-    import cv2
     import time
     
     origImg = uploaded_file
@@ -128,7 +132,6 @@ def segmentationImage(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] DEVICE IS {device}")
     print(f"[INFO] MODEL: {model_config.display_name}")
-    print(f"[INFO] CLASSES: {model_config.class_names}")
 
     # Загрузка модели
     model = buildModel(
@@ -166,13 +169,7 @@ def segmentationImage(
             
             if idx > 0:
                 avg_time_per_patch = elapsed / (idx + 1)
-                remaining = avg_time_per_patch * (total_patches - idx - 1)
-                eta_minutes = int(remaining // 60)
-                eta_seconds = int(remaining % 60)
-                eta_text = f" | Wait for... {eta_minutes}m {eta_seconds}s"
-            else:
-                eta_text = ""
-            
+
             progress_bar.progress(progress, text=f"Processing patch {idx + 1}/{total_patches}")
             
             if idx > 0:
@@ -213,11 +210,8 @@ def segmentationImage(
         binary_masks[name] = (predMask == i).astype(np.uint8)
     
     # Получаем оба варианта: с постобработкой и без
-    print("[INFO] Generating raw masks (no postprocessing)...")
-    raw_masks = simple_labeling(binary_masks, model_config)
-    
-    print("[INFO] Generating postprocessed masks...")
-    postprocessed_masks = apply_postprocessing_to_masks(binary_masks, probs, model_config, threshold)
+    raw_masks = simple_labeling(binary_masks)
+    postprocessed_masks = apply_postsegmentation_to_masks(binary_masks, probs, model_config, threshold)
     
     # Формирование итоговых нумерованных масок для каждого класса
     def expand_to_full_size(masks_dict):
@@ -237,5 +231,5 @@ def segmentationImage(
     raw_masks_full = expand_to_full_size(raw_masks)
     postprocessed_masks_full = expand_to_full_size(postprocessed_masks)
     
-    print(f"[INFO] PROCESSING {imgName} DONE!")
+    print(f"[INFO] segmentation {imgName} DONE!")
     return postprocessed_masks_full, raw_masks_full, probs

@@ -56,7 +56,9 @@ def drawPicture(uploaded_file, objects, classColors, isShowIntermediate=True):
         origImg = cv2.cvtColor(origImg, cv2.COLOR_BGR2RGBA)
     
     # Создаем оверлей одним проходом
-    overlay = np.zeros_like(origImg, dtype=np.uint8)
+    base_rgb = origImg[..., :3].copy()
+    overlay_rgb = np.zeros_like(base_rgb)
+    overlay_alpha = np.zeros(base_rgb.shape[:2], dtype=np.uint8)
     
     for className, mask in objects.items():
         if className not in classColors:
@@ -71,20 +73,21 @@ def drawPicture(uploaded_file, objects, classColors, isShowIntermediate=True):
                 continue
         
         # Векторизованное применение маски
-        mask_bool = mask > 0
+        mask_bool = mask != 0
         if np.any(mask_bool):
-            overlay[mask_bool] = color
+            overlay_rgb[mask_bool] = color[:3]
+            overlay_alpha[mask_bool] = color[3]
     
     # Быстрое смешивание через numpy (векторизовано)
-    alpha = overlay[..., 3:4] / 255.0
-    result = (1 - alpha) * origImg[..., :3] + alpha * overlay[..., :3]
+    covered = overlay_alpha != 0
+    if np.any(covered):
+        alpha = overlay_alpha[covered, None].astype(np.uint16)
+        base = base_rgb[covered].astype(np.uint16)
+        color = overlay_rgb[covered].astype(np.uint16)
+        base_rgb[covered] = ((base * (255 - alpha) + color * alpha) // 255).astype(np.uint8)
     
     # Конвертируем обратно в uint8 и добавляем альфа-канал
-    result_img = np.zeros_like(origImg)
-    result_img[..., :3] = result.astype(np.uint8)
-    result_img[..., 3] = 255
-    
-    return Image.fromarray(result_img)
+    return Image.fromarray(base_rgb, mode="RGB")
 
 
 def resizeForDisplay(image: Image.Image, max_width: int = 2560) -> Image.Image:

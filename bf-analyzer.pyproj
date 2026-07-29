@@ -27,41 +27,71 @@
     <InterpreterReference Include="Global|PythonCore|3.11" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="app\" />
-    <Folder Include="app\.streamlit\" />
-    <Folder Include="model\" />
+    <Folder Include=".streamlit\" />
+    <Folder Include="styles\" />
     <Folder Include="core\" />
-    <Folder Include="processing\" />
-    <Folder Include="src\" />
+    <Folder Include="models\" />
+    <Folder Include="models\__pycache__\" />
+    <Folder Include="segmentation\" />
+    <Folder Include="segmentation\__pycache__\" />
+    <Folder Include="utils\" />
+    <Folder Include="utils\__pycache__\" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="app\.streamlit\config.toml" />
+    <Content Include=".streamlit\config.toml" />
+    <Content Include="models\bacillus.pth" />
+    <Content Include="models\coccus.pth" />
+    <Content Include="models\__pycache__\model.cpython-311.pyc" />
+    <Content Include="models\__pycache__\model.cpython-312.pyc" />
+    <Content Include="models\__pycache__\__init__.cpython-311.pyc" />
+    <Content Include="models\__pycache__\__init__.cpython-312.pyc" />
+    <Content Include="segmentation\__pycache__\filtration.cpython-311.pyc" />
+    <Content Include="segmentation\__pycache__\filtration.cpython-312.pyc" />
+    <Content Include="segmentation\__pycache__\objects.cpython-311.pyc" />
+    <Content Include="segmentation\__pycache__\objects.cpython-312.pyc" />
+    <Content Include="segmentation\__pycache__\postprocessing.cpython-311.pyc" />
+    <Content Include="segmentation\__pycache__\postprocessing.cpython-312.pyc" />
+    <Content Include="segmentation\__pycache__\preprocessing.cpython-311.pyc" />
+    <Content Include="segmentation\__pycache__\preprocessing.cpython-312.pyc" />
+    <Content Include="segmentation\__pycache__\segmentation.cpython-311.pyc" />
+    <Content Include="segmentation\__pycache__\segmentation.cpython-312.pyc" />
+    <Content Include="segmentation\__pycache__\statistics.cpython-311.pyc" />
+    <Content Include="segmentation\__pycache__\statistics.cpython-312.pyc" />
+    <Content Include="segmentation\__pycache__\__init__.cpython-311.pyc" />
+    <Content Include="segmentation\__pycache__\__init__.cpython-312.pyc" />
+    <Content Include="utils\__pycache__\autoscale.cpython-311.pyc" />
+    <Content Include="utils\__pycache__\autoscale.cpython-312.pyc" />
+    <Content Include="utils\__pycache__\converter.cpython-311.pyc" />
+    <Content Include="utils\__pycache__\converter.cpython-312.pyc" />
+    <Content Include="utils\__pycache__\dataset.cpython-311.pyc" />
+    <Content Include="utils\__pycache__\dataset.cpython-312.pyc" />
+    <Content Include="utils\__pycache__\drawing.cpython-311.pyc" />
+    <Content Include="utils\__pycache__\drawing.cpython-312.pyc" />
+    <Content Include="utils\__pycache__\imgProcessing.cpython-311.pyc" />
+    <Content Include="utils\__pycache__\imgProcessing.cpython-312.pyc" />
+    <Content Include="utils\__pycache__\segProcessing.cpython-311.pyc" />
+    <Content Include="utils\__pycache__\segProcessing.cpython-312.pyc" />
+    <Content Include="utils\__pycache__\__init__.cpython-311.pyc" />
+    <Content Include="utils\__pycache__\__init__.cpython-312.pyc" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="app\app.py" />
-    <Compile Include="app\logger.py" />
-    <Compile Include="app\styles.py" />
-    <Compile Include="app\__init__.py" />
+    <Compile Include="app.py" />
     <Compile Include="core\componentsUI.py" />
     <Compile Include="core\factoryUI.py" />
     <Compile Include="core\handlers.py" />
-    <Compile Include="core\modelConfigs.py" />
     <Compile Include="core\stateManager.py" />
-    <Compile Include="core\__init__.py" />
-    <Compile Include="model\__init__.py" />
-    <Compile Include="processing\filtration.py" />
-    <Compile Include="processing\objects.py" />
-    <Compile Include="processing\postprocessing.py" />
-    <Compile Include="processing\preprocessing.py" />
-    <Compile Include="processing\segmentation.py" />
-    <Compile Include="processing\statistics.py" />
-    <Compile Include="processing\__init__.py" />
-    <Compile Include="src\drawing.py" />
-    <Compile Include="model\model.py" />
-    <Compile Include="src\autoscale.py" />
-    <Compile Include="src\dataset.py" />
-    <Compile Include="src\converter.py" />
-    <Compile Include="src\__init__.py" />
+    <Compile Include="models\model.py" />
+    <Compile Include="segmentation\filtration.py" />
+    <Compile Include="segmentation\inference.py" />
+    <Compile Include="segmentation\objects.py" />
+    <Compile Include="segmentation\postprocessing.py" />
+    <Compile Include="segmentation\preprocessing.py" />
+    <Compile Include="segmentation\statistics.py" />
+    <Compile Include="styles\styles.py" />
+    <Compile Include="utils\autoscale.py" />
+    <Compile Include="utils\converter.py" />
+    <Compile Include="utils\dataset.py" />
+    <Compile Include="utils\drawing.py" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in

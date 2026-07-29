@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-from skimage.measure import regionprops, label
+from skimage.measure import regionprops
 import streamlit as st
 
 @st.cache_data(show_spinner=False, ttl=6000, max_entries=10)
@@ -21,33 +21,21 @@ def prepareObjectInfo(predictedLabels, model_config):
     objectsInfo = {}
     areaStats = {}
 
-    #print(f"\n[DEBUG] prepareObjectInfo START")
-    #print(f"  model: {model_config.name}")
-    #print(f"  predictedLabels keys: {list(predictedLabels.keys())}")
-    
     for className, labeledMask in predictedLabels.items():
         # Пропускаем фон
         if "background" in className or className == "bg":
             continue
             
         props = regionprops(labeledMask.astype(np.int32))
-        #print(f"\n  Class: {className}")
-        #print(f"    Found {len(props)} regions")
-        
+
         class_objects = [{
             "id": prop.label,
             "area": prop.area,
             "eccentricity": prop.eccentricity,
             "bbox": prop.bbox
         } for prop in props]
-        
-        # Выводим информацию о каждом объекте
-        #for obj in class_objects:
-            #print(f"      id:{obj['id']}, area:{obj['area']}, ecc:{obj['eccentricity']:.3f}")
-        
+
         objectsInfo[className] = class_objects
-        
-        # Статистика для слайдеров
         areas = [prop.area for prop in props]
         if areas:
             areaStats[className] = {
@@ -57,7 +45,6 @@ def prepareObjectInfo(predictedLabels, model_config):
         else:
             areaStats[className] = {"min_area": 0, "max_area": 1}
     
-    #print(f"\n[DEBUG] prepareObjectInfo END\n")
     return objectsInfo, areaStats
 
 @st.cache_data(show_spinner=False, ttl=6000, max_entries=10) 

@@ -101,9 +101,7 @@ def updateMaskCVAT(xml_path, width, height, model_config):
     if model_config and model_config.cvat_labels:
         for internal_class, cvat_label in model_config.cvat_labels.items():
             label_map[cvat_label] = internal_class
-    
-    print(f"[DEBUG] updateMaskCVAT label_map: {label_map}")
-    
+
     xml_io = io.BytesIO(xml_path)
     tree = ET.parse(xml_io)
     root = tree.getroot()
@@ -120,11 +118,9 @@ def updateMaskCVAT(xml_path, width, height, model_config):
         for obj in list(image):
             label = obj.attrib.get('label')
             if label not in label_map:
-                print(f"[DEBUG] Skipping unknown label: {label}")
                 continue
 
             class_key = label_map[label]
-            print(f"[DEBUG] Processing {label} -> {class_key}")
 
             if obj.tag == 'mask':
                 # ==== RLE ====
@@ -139,7 +135,6 @@ def updateMaskCVAT(xml_path, width, height, model_config):
                     obj_id = next_obj_id[class_key]
                     masks[class_key][top:top+h, left:left+w][decoded > 0] = obj_id
                     next_obj_id[class_key] += 1
-                    print(f"[DEBUG]   Added mask object {obj_id}")
 
             elif obj.tag == 'polygon':
                 # ==== Полигоны ====
@@ -153,13 +148,11 @@ def updateMaskCVAT(xml_path, width, height, model_config):
                 obj_id = next_obj_id[class_key]
                 cv2.fillPoly(masks[class_key], [pts], color=obj_id)
                 next_obj_id[class_key] += 1
-                print(f"[DEBUG]   Added polygon object {obj_id}")
-
+ 
     # Выводим статистику
     for class_name, mask in masks.items():
         unique_ids = np.unique(mask)
         obj_count = len(unique_ids[unique_ids != 0])
-        print(f"[DEBUG] Class {class_name}: {obj_count} objects loaded")
 
     return masks
 
@@ -583,28 +576,6 @@ def saveResultsAsZip(filteredObjects, classColors, drawImgPIL,
                 
                 objects_df.to_excel(writer, sheet_name='Объекты', index=False)
             
-            # # 5. ЛИСТ: Информация из filteredObjectsInfo (если есть)
-            # if filteredObjectsInfo is not None:
-            #     try:
-            #         if isinstance(filteredObjectsInfo, str):
-            #             from io import StringIO
-            #             info_df = pd.read_csv(StringIO(filteredObjectsInfo))
-            #         elif isinstance(filteredObjectsInfo, pd.DataFrame):
-            #             info_df = filteredObjectsInfo
-            #         else:
-            #             info_df = pd.DataFrame(filteredObjectsInfo)
-                    
-            #         if not info_df.empty:
-            #             # Если данных много, оставляем как есть
-            #             info_df.to_excel(writer, sheet_name='Доп. информация', index=False)
-            #     except Exception as e:
-            #         # Если не удалось распарсить, сохраняем как текст в транспонированном виде
-            #         text_df = pd.DataFrame({
-            #             'Параметр': ['Дополнительная информация'],
-            #             'Значение': [str(filteredObjectsInfo)[:32767]]  # Ограничение Excel
-            #         })
-            #         text_df.to_excel(writer, sheet_name='Доп. информация', index=False)
-        
 
         excel_buffer.seek(0)
         wb = load_workbook(excel_buffer)

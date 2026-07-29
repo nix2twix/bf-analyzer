@@ -1,10 +1,9 @@
-import streamlit as st
-from typing import Dict, Any, Optional
-from .stateManager import StateManager
-from .factoryUI import ModelUIFactory
 import numpy as np
+import streamlit as st
+
 from datetime import datetime
-from PIL import Image
+from typing import Dict, Any, Optional
+from core.factoryUI import ModelUIFactory
 
 class UIComponents:
     """
@@ -12,7 +11,7 @@ class UIComponents:
     Отвечает за компоновку и взаимодействие с состоянием.
     """
     
-    def __init__(self, state_manager: StateManager):
+    def __init__(self, state_manager):
         self.state = state_manager
         self.factory = ModelUIFactory()
         # Кэш для изображений в session_state
@@ -23,23 +22,22 @@ class UIComponents:
     def render_workflow_area(self) -> Optional[Any]:
         """Отрисовывает рабочую область с кэшированием"""
         if self.state.state.uploadedImage is None:
-            st.info("SEM-image was not uploaded.")
+            st.info("The SEM image wasn't uploaded. Please upload the image using the menu on the right.")
             return None
 
-        self._render_scale_bar()
-
         if self.state.state.filteredObjects is not None:
-            from src.drawing import drawPicture, get_objects_hash, resizeForDisplay
+            from utils.drawing import drawPicture, resizeForDisplay
         
             has_objects = False
             for class_name, mask in self.state.state.filteredObjects.items():
-                if class_name not in ["bg", "background"] and np.sum(mask > 0) > 0:
+                if class_name not in ["bg", "background"] and np.any(mask):
                     has_objects = True
                     break
         
             if has_objects:
-                objects_hash = get_objects_hash(self.state.state.filteredObjects)
-                cache_key = f"img_{objects_hash}_{self.state.state.isShowIntermediate}"
+                # The state manager clears this cache whenever masks change.
+                # Do not hash every mask pixel on each Streamlit rerun.
+                cache_key = f"segmented_{self.state.state.isShowIntermediate}"
             
                 if cache_key not in st.session_state.image_cache:
                     display_image = drawPicture(
@@ -56,13 +54,12 @@ class UIComponents:
                     display_image = st.session_state.image_cache[cache_key]
             
                 # Адаптивное отображение
-                st.image(display_image, caption="Segmentation result", width='stretch')
+                st.image(display_image, width='stretch')
                 return display_image
             else:
                 st.warning("⚠️ No objects found after filtering")
                 st.image(
                     self.state.state.uploadedImage,
-                    caption=f"Loaded SEM-image {self.state.state.imageName}",
                     width='stretch'
                 )
                 return None
@@ -71,15 +68,14 @@ class UIComponents:
             if cache_key not in st.session_state.image_cache:
                 display_image = self.state.state.uploadedImage
                 if display_image.width > 1200:
-                    from src.drawing import resizeForDisplay
+                    from utils.drawing import resizeForDisplay
                     display_image = resizeForDisplay(display_image, max_width=1200)
                 st.session_state.image_cache[cache_key] = display_image
             else:
                 display_image = st.session_state.image_cache[cache_key]
-        
+            
             st.image(
                 display_image,
-                caption=f"Loaded SEM-image {self.state.state.imageName}",
                 width='stretch'
             )
             return None
@@ -90,7 +86,7 @@ class UIComponents:
             return None
 
         if self.state.state.filteredObjects is not None:
-            from src.drawing import drawPicture
+            from utils.drawing import drawPicture
             
             has_objects = False
             for class_name, mask in self.state.state.filteredObjects.items():
@@ -117,9 +113,11 @@ class UIComponents:
     
     def render_file_uploader_only(self):
         """Отрисовывает только загрузчик файла"""
-        return st.file_uploader(label="",
-            help="⬇️ Upload SEM-image", 
-            type=["bmp", "png", "jpg", "jpeg"], 
+        return st.file_uploader(
+            label="Upload SEM image",
+            label_visibility="collapsed",
+            #help="⬇️ Upload SEM-image",
+            type=["bmp", "png", "jpg", "jpeg"],
             key="uploader"
         )
     
@@ -130,14 +128,15 @@ class UIComponents:
             "Coccus": "Coccus"
         }
         
-        current_model = self.state.state.get("modelType", "Bacillus")
-        
-        selected_display = st.selectbox(
-            "Type of microorganisms:",
+        selected_display = st.segmented_control(
+            label="Type of microorganisms:",
+            default=list(model_options.values())[0],
             options=list(model_options.values()),
-            index=list(model_options.keys()).index(current_model),
+            selection_mode="single",
+            required=True,
+            width="stretch",
             key="modelChooser"
-        )
+            )
         
         for key, value in model_options.items():
             if value == selected_display:
@@ -173,22 +172,7 @@ class UIComponents:
     
         if config and self.state.state.predictedObjects is not None:
             with container:
-            
-                current_value = self.state.state.get("apply_postprocessing", False)
-            
-                postprocessing_toggle = st.toggle(
-                    "Apply morphological postprocessing",
-                    value=current_value,
-                    help="When enabled applies smoothing, hole filling and class filtering.\n"
-                         "When disabled uses raw connected components",
-                    key="postprocessing_toggle"
-                )
-            
-                if postprocessing_toggle != current_value:
-                    self.state.toggle_postprocessing(postprocessing_toggle)
-                    st.rerun()
-
-            
+                       
                 params = self.factory.create_filtration_ui(config, self.state.state)
                 if params:
                     return params
@@ -209,39 +193,56 @@ class UIComponents:
         cvat_key = f"cvat_export_{suffix}" if suffix else "cvat_export_main"
         results_key = f"results_export_{suffix}" if suffix else "results_export_main"
         
+        if self.state.state.export_dirty:
+            if st.button(
+                    "⬇️ Save changes",
+                    key=f"prepare_results_{suffix}",
+                    width="stretch",
+                    disabled=self.state.state.filteredObjects is None,
+                ):
+                    return "prepare"
+            return None
+
         with col1:
             st.download_button(
                 label="📥 CVAT backup",
-                data=self.state.state.polygonsCVAT,
+                data=self.state.state.polygonsCVAT or b"",
                 file_name=f"backup-{datetime.now().strftime('%d-%m-%Y-%H-%M')}.zip",
                 mime="application/zip",
                 disabled=self.state.state.uploadedImage is None or self.state.state.polygonsCVAT is None,
                 width='stretch',
-                help="Export masks in CVAT format",
+                help="Download masks in CVAT format",
                 key=cvat_key
             )
-        
         with col2:
             st.download_button(
                 label="💾 Results",
-                data=self.state.state.zipBuffer,
+                    data=self.state.state.zipBuffer or b"",
                 file_name=f"results-{datetime.now().strftime('%Y-%m-%d-%H-%M')}.zip",
                 mime="application/zip",
                 disabled=self.state.state.uploadedImage is None or self.state.state.zipBuffer is None,
                 width='stretch',
-                help="Download segmentation results (PNG + Excel)",
+                help="Download segmentation results",
                 key=results_key
             )
-    
-    # === ПРИВАТНЫЕ МЕТОДЫ ===
-    def _render_scale_bar(self):
-        """Приватный метод для отрисовки информации о масштабе"""
-        workFlowCol, scaleCol, butCol = st.columns([0.4, 0.5, 0.1], vertical_alignment='bottom')
-        
-        with workFlowCol:
-            st.subheader("🔬 Workflow", anchor=False)
-        
-        with scaleCol:
+    def render_postprocess_toggle(self):
+        current_value = self.state.state.get("apply_postsegmentation", False)
+            
+        postsegmentation_toggle = st.toggle(
+            "Morphological postprocess",
+            value=current_value,
+            help="When enabled applies smoothing, hole filling and class filtering.\n"
+                    "When disabled uses raw connected components",
+            key="postsegmentation_toggle"
+        )
+            
+        if postsegmentation_toggle != current_value:
+            self.state.toggle_postsegmentation(postsegmentation_toggle)
+
+    def render_scale_bar(self):
+        """Метод для отрисовки информации о масштабе"""
+        with st.container(horizontal=True):
+
             img_scale = self.state.state.imgScale
             scale_text = self.state.state.scaleText
             
@@ -251,22 +252,18 @@ class UIComponents:
             else:
                 display_scale = img_scale
                 display_help = scale_text if scale_text else "Scale set"
-            
-            st.subheader(
-                f"🔎 Scale: {display_scale:.4f} μm/px",
-                help=display_help,
-                anchor=False
-            )
         
-        with butCol:
-            if st.button("✏️", key="scale_edit_btn"):
+            if st.button(f"🔎 Scale: {display_scale:.4f} μm/px", 
+                         help=display_help,
+                         key="scale_edit_btn",
+                         width='stretch'):
                 st.session_state.show_scale_dialog = True
                 st.rerun()
-        
+
         if st.session_state.get("show_scale_dialog", False):
-            self._show_scale_dialog()
+            self.show_scale_dialog()
     
-    def _show_scale_dialog(self):
+    def show_scale_dialog(self):
         """Показывает диалог для ручной установки масштаба"""
         @st.dialog("Set the scale manually")
         def dialog():
@@ -310,7 +307,7 @@ class UIComponents:
         
                     # Сразу запускаем автоопределение если есть изображение
                     if self.state.state.uploadedImage is not None:
-                        from src.autoscale import estimateScale
+                        from utils.autoscale import estimateScale
                         tempArrImg = np.array(self.state.state.uploadedImage, dtype='uint8')
                         autoScale, scaleData = estimateScale(tempArrImg)
                         self.state.update_scale(scaleData, autoScale)

@@ -37,7 +37,6 @@ class TestDataset(Dataset):
         else:
             img_np = image.copy()
         
-        #print(f"Image type: {img_np.dtype}, shape: {img_np.shape}")
         if img_np.dtype != np.uint8 and img_np.dtype != np.uint16:
             if img_np.max() <= 1.0:
                 img_np = (img_np * 255).astype(np.uint8)

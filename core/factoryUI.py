@@ -3,7 +3,7 @@ import streamlit as st
 from typing import Dict
 
 # === PROJECT SCRIPTS ===
-from .modelConfigs import ModelConfig
+from models.configs import ModelConfig
 
 class ModelUIFactory:
     """Фабрика для создания UI-элементов специфичных для модели"""
@@ -21,6 +21,7 @@ class ModelUIFactory:
                         'min': float(min_val),
                         'max': float(max_val)
                     }
+                    state["filters_dirty"] = True
         return callback
     
     @staticmethod
@@ -34,7 +35,6 @@ class ModelUIFactory:
         if "filtration_params" not in state:  
             state["filtration_params"] = {}
 
-        # Добавляем CSS для улучшения отзывчивости слайдеров
         css_rules.append("""
             div[data-testid="stSlider"] {
                 pointer-events: auto !important;
@@ -89,7 +89,9 @@ class ModelUIFactory:
                     break
 
             # Уникальный ключ
-            key = f"slider_{param_name}_{hash(str(state.get('predictedObjects')))}"
+            # Object identity changes with a new segmentation, without
+            # serializing all mask arrays on every rerun just to build a key.
+            key = f"slider_{param_name}_{state.get('modelType', '')}"
 
             # Добавляем CSS правило для цвета
             css_rules.append(f"""
@@ -109,19 +111,10 @@ class ModelUIFactory:
                 max_value=float(slider_max),
                 value=(float(current_min), float(current_max)),
                 step=step,
-                key=key, 
+                key=key,
                 disabled=state.get("predictedObjects") is None,
-                on_change=ModelUIFactory._on_slider_change(param_name, state)
             )
             
-            # Сразу обновляем состояние из слайдера (на случай если callback не сработал)
-            if key in st.session_state and state.get("predictedObjects") is not None:
-                min_val, max_val = st.session_state[key]
-                state["filtration_params"][param_name] = {
-                    'min': float(min_val),
-                    'max': float(max_val)
-                }
-
         # Применяем стили
         if css_rules:
             st.markdown(f"<style>{''.join(css_rules)}</style>", unsafe_allow_html=True)
@@ -156,7 +149,7 @@ class ModelUIFactory:
                 ModelUIFactory._render_statistic_card(
                     class_name, result_info[class_name], config, img_area
                 )
-    
+        st.markdown('<div style="margin-bottom: 1rem;"></div>', unsafe_allow_html=True)
     @staticmethod
     def _render_statistic_card(class_name: str, stats: Dict, config: ModelConfig, img_area: float):
         """Универсальная отрисовка карточки статистики"""
@@ -166,24 +159,9 @@ class ModelUIFactory:
         )
         
         st.markdown(f"""
-            <div style="
-                background-color: rgba(255, 255, 255, 0.05); 
-                border-radius: 4px; 
-                border: 1.5px solid {text_color}; 
-                height: 2rem;
-                display: flex; 
-                justify-content: center;
-                align-items: center;
-                font-size: 1.25rem;
-                margin: 0;
-                padding: 0;
-                color: {text_color};">
-                {title}
-            </div>
-            <div style="font-size: 0.9rem; margin-top: 0.5rem;">
-                Count: {stats['count']}<br>
-                Area (μm²): {stats['total_area_mkm']:.2f}<br> 
-                Area (%): {((stats['total_area_mkm'] / img_area) * 100):.2f}  
+            <div style="font-size: 0.9rem; margin-top: 0.5rem; color: {text_color};">
+                {title} (counted {stats['count']})<br>
+                Total area: {stats['total_area_mkm']:.2f} μm² ({((stats['total_area_mkm'] / img_area) * 100):.2f}%) 
             </div>
         """, unsafe_allow_html=True)
-        st.markdown('<div style="margin-bottom: 1rem;"></div>', unsafe_allow_html=True)
+        

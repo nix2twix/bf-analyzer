@@ -84,7 +84,6 @@ def estimateScale(c_image):
     
     lowerBound = findBorder(c_image)
     c_image = normalizeScaleBar(c_image, lowerBound)
-    #Image.fromarray(c_image).show()
     
     if (lowerBound is not None):      
         text = findText(c_image[lowerBound:, :])

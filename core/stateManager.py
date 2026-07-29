@@ -5,12 +5,11 @@ from PIL import Image
 from typing import Optional, Dict
 
 # === PROJECT SCRIPTS ===
-from .modelConfigs import MODEL_CONFIGS, ModelConfig
-
+from models.configs import MODEL_CONFIGS, ModelConfig
+from segmentation.filtration import filtrationObjects
 
 class StateManager:
     """Управляет состоянием приложения"""
-    
     def __init__(self):
         self.state = st.session_state
         self._initialize()
@@ -22,13 +21,14 @@ class StateManager:
             self.state.initialized = True
             self.state.segmentation_in_progress = False
             self.state.manual_scale_set = False
-            self.state.apply_postprocessing = True 
+            self.state.apply_postsegmentation = True
             self.state.postprocessed_masks = None
             self.state.raw_masks = None
             self.state.probs = None
-    
+        if "export_dirty" not in self.state:
+            self.state.export_dirty = True
+
     def reset_all(self):
-        print("[DEBUG] reset_all called!")
         """Полный сброс состояния"""
         # IMAGE
         self.state.imageName = None
@@ -65,25 +65,32 @@ class StateManager:
         self.state.classColors = self._get_model_colors("Bacillus")
         
         # EXPORT
-        self.state.polygonsCVAT = ""
+        self.state.polygonsCVAT = None
         self.state.uploadedAnnName = None
         self.state.uploadedAnn = None
-        self.state.zipBuffer = ""
+        self.state.zipBuffer = None
+        self.state.export_dirty = True
         
         # MODEL
         self.state.model_config = self.get_config()
         self._init_dynamic_filtration_settings()
         
-        # PROCESSING SETTINGS
-        self.state.apply_postprocessing = True
+        # segmentation SETTINGS
+        self.state.apply_postsegmentation = True
         
-        # CASH
+        # CACHE
         self._clear_image_cache()
     
     def _clear_image_cache(self):
         """Очистка кэша изображений в session_state"""
         if "image_cache" in st.session_state:
             st.session_state.image_cache = {}
+
+    def invalidate_export(self):
+        """Invalidate archives whenever their source masks change."""
+        self.state.polygonsCVAT = None
+        self.state.zipBuffer = None
+        self.state.export_dirty = True
         
     def _init_dynamic_filtration_settings(self):
         """
@@ -104,14 +111,13 @@ class StateManager:
                 }
     
  
-    def toggle_postprocessing(self, value: bool):
+    def toggle_postsegmentation(self, value: bool):
         """Переключает между постобработанными и сырыми масками"""
-        if self.state.apply_postprocessing != value:
-            self.state.apply_postprocessing = value
+        if self.state.apply_postsegmentation != value:
+            self.state.apply_postsegmentation = value
         
             # Проверяем, что маски существуют
             if self.state.postprocessed_masks is not None and self.state.raw_masks is not None:
-                # Просто переключаем текущие маски
                 if value:
                     self.state.predictedObjects = self.state.postprocessed_masks
                 else:
@@ -119,37 +125,52 @@ class StateManager:
             
                 # Пересчитываем статистику для новых масок
                 if self.state.predictedObjects is not None and self.state.model_config:
-                    from processing import prepareObjectInfo
+                    from segmentation.objects import prepareObjectInfo
                     objects_info, area_stats = prepareObjectInfo(
                         self.state.predictedObjects, 
                         self.state.model_config
                     )
-                    self.update_area_stats(objects_info, area_stats)
+                    self.update_area_stats(objects_info, area_stats, preserve_filters=True)
                     self.state.filteredObjects = None
                     self.apply_filtration()
-                
-                    # Очищаем кэш изображений для обновления визуализации
                     self._clear_image_cache()
     
-    def get_apply_postprocessing(self) -> bool:
+    def get_apply_postsegmentation(self) -> bool:
         """Возвращает текущий статус постобработки"""
-        return self.state.get("apply_postprocessing", True)
+        return self.state.get("apply_postsegmentation", True)
                 
-    def update_slider_range(self, param_name: str, min_val: float, max_val: float):
+    def update_slider_range(self, param_name: str, min_val: float, max_val: float, preserve_value: bool = False):
         """Обновление диапазона слайдера"""
         self.state.slider_ranges[param_name] = (min_val, max_val)
+        if not preserve_value or param_name not in self.state.filtration_params:
+            return
+
+        current = self.state.filtration_params[param_name]
+        current_min = max(min_val, min(current.get("min", min_val), max_val))
+        current_max = max(min_val, min(current.get("max", max_val), max_val))
+        if current_min > current_max:
+            current_min = current_max
+
+        self.state.filtration_params[param_name] = {"min": current_min, "max": current_max}
+        widget_key = f"slider_{param_name}_{self.state.get('modelType', '')}"
+        self.state[widget_key] = (float(current_min), float(current_max))
     
-    def update_filtration_param(self, param_name: str, value: dict):
+    def update_filter_parameter(self, param_name: str, value: dict):
         """Обновление параметра фильтрации (ожидает словарь с min/max)"""
         self.state.filtration_params[param_name] = value
     
-    def update_filtration_params_from_ui(self, ui_params: Dict):
-        """Обновление параметров фильтрации из UI"""
+    def update_filtration_params(self, ui_params: Dict) -> bool:
+        """Update filters and report whether their values changed."""
+        changed = False
         for param_name, (min_val, max_val) in ui_params.items():
-            self.state.filtration_params[param_name] = {
+            value = {
                 'min': min_val,
                 'max': max_val
             }
+            if self.state.filtration_params.get(param_name) != value:
+                self.state.filtration_params[param_name] = value
+                changed = True
+        return changed
     
     def get_slider_range(self, param_name: str, default=(100, 1000)) -> tuple:
         """Получить диапазон слайдера"""
@@ -175,7 +196,6 @@ class StateManager:
         if model_name == self.state.get("modelType"):
             return False
 
-        old_model = self.state.modelType
         self.state.modelType = model_name
         self.state.model_config = self.get_config()
         
@@ -188,11 +208,8 @@ class StateManager:
         self.reset_results()
         self.state.last_uploaded_file = None
         self.state.last_uploaded_ann = None
-        
-        # Очищаем кэш изображений
         self._clear_image_cache()
 
-        print(f"[INFO] Model changed from {old_model} to {model_name}. Results cleared.")
         return True
     
     def has_results(self) -> bool:
@@ -204,8 +221,7 @@ class StateManager:
         self.state.objectsInfo = None
         self.state.filteredObjectsInfo = None
         self.state.isShowIntermediate = True
-        self.state.polygonsCVAT = ""
-        self.state.zipBuffer = ""
+        self.invalidate_export()
         self.state.postprocessed_masks = None
         self.state.raw_masks = None
         self.state.probs = None
@@ -230,8 +246,6 @@ class StateManager:
         self.reset_results()
     
     def update_scale(self, scale_data: tuple, auto_scale: float):
-        print(f"[DEBUG] update_scale called with auto_scale={auto_scale}, scale_data={scale_data}")
-    
         if scale_data is not None:
             self.state.scaleInfo = scale_data
             self.state.imgScale = auto_scale
@@ -239,25 +253,20 @@ class StateManager:
             if scale_data:
                 self.state.scaleText = f"{scale_data[4]} (μm) / {scale_data[2]} (px) = {auto_scale:.2f}"
                 self.state.infoLineHeight = self.state.imgHeight - scale_data[0]
-                print(f"infoLineHeight: {self.state.infoLineHeight}")
-                print(f"[DEBUG] update_scale: imgScale set to {auto_scale}")
         else:
             if self.state.scaleInfo is None:
                 self.state.scaleText = "1 (px) / 1 (μm) = 1"
                 self.state.infoLineHeight = 0
                 self.state.imgScale = 1
-                print(f"[DEBUG] update_scale: using default scale=1")
-            else:
-                print(f"[DEBUG] update_scale: keeping existing scaleInfo={self.state.scaleInfo}")
-    
-    def update_area_stats(self, objects_info: Dict, area_stats: Dict):
+
+    def update_area_stats(self, objects_info: Dict, area_stats: Dict, preserve_filters: bool = False):
         """Обновление статистики с динамическими диапазонами"""
         self.state.objectsInfo = objects_info
         self.state.filteredObjectsInfo = objects_info
-        self._update_slider_ranges_from_stats(area_stats)
-        self._update_eccentricity_ranges(objects_info)
+        self._update_slider_ranges_from_stats(area_stats, preserve_filters)
+        self._update_eccentricity_ranges(objects_info, preserve_filters)
     
-    def _update_slider_ranges_from_stats(self, area_stats: Dict):
+    def _update_slider_ranges_from_stats(self, area_stats: Dict, preserve_filters: bool = False):
         """Динамическое обновление диапазонов на основе статистики"""
         config = self.get_config()
         if not config:
@@ -283,15 +292,16 @@ class StateManager:
                     max_val = max_val + 100
             
                 # Обновляем диапазон слайдера
-                self.update_slider_range(param_name, min_val, max_val)
+                self.update_slider_range(param_name, min_val, max_val, preserve_filters)
             
                 # Обновляем filtration_params (храним оба значения)
-                self.state.filtration_params[param_name] = {
-                    'min': min_val,
-                    'max': max_val
-                }
+                if not preserve_filters:
+                    self.state.filtration_params[param_name] = {
+                        'min': min_val,
+                        'max': max_val
+                    }
                     
-    def _update_eccentricity_ranges(self, objects_info: Dict):
+    def _update_eccentricity_ranges(self, objects_info: Dict, preserve_filters: bool = False):
         """Обновление диапазонов для эксцентриситета на основе объектов"""
         config = self.get_config()
         if not config:
@@ -323,22 +333,19 @@ class StateManager:
                     max_val = min(1.0, max_val + 0.1)
         
                 # Обновляем диапазон слайдера
-                self.update_slider_range(param_name, min_val, max_val)
+                self.update_slider_range(param_name, min_val, max_val, preserve_filters)
             
                 # Обновляем filtration_params
-                self.state.filtration_params[param_name] = {
-                    'min': min_val,
-                    'max': max_val
-                }
+                if not preserve_filters:
+                    self.state.filtration_params[param_name] = {
+                        'min': min_val,
+                        'max': max_val
+                    }
                 
-    def update_filtration_params(self):
-        """Обновление параметров фильтрации (старый метод для совместимости)"""
-        pass
-    
+   
     def apply_filtration(self):
         """Применение фильтрации к predictedObjects"""
         if self.state.predictedObjects is not None and self.state.objectsInfo is not None:
-            from processing import filtrationObjects
             config = self.get_config()
 
             if not self.state.filtration_params:
@@ -352,9 +359,11 @@ class StateManager:
             )
     
             self.state.filteredObjectsInfo = None
+            self.invalidate_export()
             # Очищаем кэш изображений при изменении фильтрации
             self._clear_image_cache()
         elif self.state.predictedObjects is not None:
             self.state.filteredObjects = self.state.predictedObjects.copy()
             self.state.filteredObjectsInfo = None
+            self.invalidate_export()
             self._clear_image_cache()

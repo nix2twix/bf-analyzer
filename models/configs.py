@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple, Optional
 
 # Пути к моделям
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODELS_DIR = os.path.join(BASE_DIR, "model")
+MODELS_DIR = os.path.join(BASE_DIR, "models")
 
 @dataclass
 class ModelConfig:
@@ -23,7 +23,7 @@ class ModelConfig:
     # Для статистики
     class_titles: Dict[str, Tuple[str, str]]
 
-    # postprocessing
+    # postsegmentation
     postprocess_params: Optional[Dict[str, Dict]] = None
     
     # Для CVAT 
@@ -88,92 +88,7 @@ BACILLUS_CONFIG = ModelConfig(
         "Defect": "#ff0000"  
     }
 )
-COCCUS_NO10IMGS_CONFIG = ModelConfig(
-    name="Coccus_no10imgs",
-    display_name="Coccus_no10imgs",
-    class_names=["background", "biofilm", "planktonic"],
-    num_classes=3,
-    class_colors={
-        "biofilm": (18, 225, 249, 178),
-        "planktonic": (14, 101, 235, 178)
-    },
-    checkpoint_path=os.path.join(MODELS_DIR, "coccus_no10imgs_epoch500.pth"),
-    class_labels={"background": 0, "biofilm": 1, "planktonic": 2},
-    postprocess_params={
-        "biofilm": {
-            "area": (100, 4587520)
-        },
-        "planktonic": {
-            "area": (100, 4587520)
-        }
-    },
-    filtration_params={
-        "biofilm_area": (100, 100000),
-        "planktonic_area": (100, 100000)
-    },
-    class_titles={
-        "biofilm": ("Biofilms", "#12e1f9"),
-        "planktonic": ("Planktonic", "#0e65eb")
-    },
-    class_weights={
-        "background": 0.1,
-        "biofilm": 1.0,
-        "planktonic": 10.0
-    },
 
-    cvat_labels={
-        "biofilm": "Biofilm",
-        "planktonic": "Planktonic"
-    },
-    cvat_label_colors={
-        "Biofilm": "#12e1f9",
-        "Planktonic": "#0e65eb",
-        "Defect": "#ff0000"
-    }
-)
-COCCUS_AUGMENTED_CONFIG = ModelConfig(
-    name="Coccus_augmented",
-    display_name="Coccus_augmented",
-    class_names=["background", "biofilm", "planktonic"],
-    num_classes=3,
-    class_colors={
-        "biofilm": (18, 225, 249, 178),
-        "planktonic": (14, 101, 235, 178)
-    },
-    checkpoint_path=os.path.join(MODELS_DIR, "coccus_augmented.pth"),
-    class_labels={"background": 0, "biofilm": 1, "planktonic": 2},
-    postprocess_params={
-        "biofilm": {
-            "area": (100, 4587520)
-        },
-        "planktonic": {
-            "area": (100, 4587520)
-        }
-    },
-    filtration_params={
-        "biofilm_area": (100, 100000),
-        "planktonic_area": (100, 100000)
-    },
-    class_titles={
-        "biofilm": ("Biofilms", "#12e1f9"),
-        "planktonic": ("Planktonic", "#0e65eb")
-    },
-    class_weights={
-        "background": 0.1,
-        "biofilm": 1.0,
-        "planktonic": 10.0
-    },
-
-    cvat_labels={
-        "biofilm": "Biofilm",
-        "planktonic": "Planktonic"
-    },
-    cvat_label_colors={
-        "Biofilm": "#12e1f9",
-        "Planktonic": "#0e65eb",
-        "Defect": "#ff0000"
-    }
-)
 COCCUS_CONFIG = ModelConfig(
     name="Coccus",
     display_name="🧫 Coccus",

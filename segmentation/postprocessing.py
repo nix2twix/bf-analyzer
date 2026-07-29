@@ -2,11 +2,9 @@ import cv2
 import numpy as np
 from skimage.measure import regionprops, label
 from skimage import morphology
-from PIL import Image
-
 
 def smoothMask(mask, morph_kernel=3, morph_iters=1, gauss_kernel=3):
-    """Сглаживание маски морфологическими операциями и гауссом"""
+    """Сглаживание маски морфологическими операциями"""
     mask_uint8 = (mask > 0).astype(np.uint8)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (morph_kernel, morph_kernel))
     morph = mask_uint8.copy()
@@ -15,7 +13,7 @@ def smoothMask(mask, morph_kernel=3, morph_iters=1, gauss_kernel=3):
         morph = cv2.morphologyEx(morph, cv2.MORPH_OPEN, kernel)
     morph_float = morph.astype(np.float32)
     blurred = cv2.GaussianBlur(morph_float, (gauss_kernel, gauss_kernel), 0)
-    smoothed = (blurred > 0.9).astype(np.uint8)  # 0.9 для более агрессивного объединения
+    smoothed = (blurred > 0.9).astype(np.uint8)  
     return smoothed
 
 # Алиас для обратной совместимости
@@ -38,15 +36,10 @@ def postprocessByProbs(predMask, probMaps, classLabels, class_weights=None):
     # Бинарная маска для сглаживаемых классов
     smooth_classes = [v for k, v in classLabels.items() if k not in ["bg", "background"]]
     binMask = np.isin(predMask, smooth_classes).astype(np.uint8)
-    #binMaskImg = Image.fromarray(binMask * 255)
-    #binMaskImg.show() 
 
     binMask = smoothMask(binMask, morph_kernel=5, morph_iters=4, gauss_kernel=5) 
     binMask = fillHolesMask(binMask, area_thresh=300)
     
-    #binMaskImg = Image.fromarray((binMask * 255).astype(np.uint8))
-    #binMaskImg.show()
-
     binMaskLabeled = label(binMask)
     regions = regionprops(binMaskLabeled)
     

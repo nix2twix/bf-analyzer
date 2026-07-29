@@ -7,11 +7,12 @@ venv/
 venv_*/
 __pycache__/
 *.pyc
-
+*.sln
+*.pyproj
 *.bmp
 #.streamlit/
 userGuide/
-
+*.bat
 # User-specific files
 *.rsuser
 *.suo
