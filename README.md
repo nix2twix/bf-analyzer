@@ -4,24 +4,18 @@ Biofilm Analyzer is an interactive web application for semantic segmentation and
 
 The application combines deep learning-based segmentation with semantic filtering of connected components, allowing researchers to visualize segmentation results, interactively filter detected objects, calculate morphometric statistics, and export annotations in CVAT format.
 
----
-
 ## Features
 
 - 🔬 Semantic segmentation of SEM images
 - 🧫 Support for multiple bacterial morphologies
-- ⚙️ Interactive filtering by:
-  - object area
-  - eccentricity
+- ⚙️ Interactive filtering 
 - 📊 Automatic morphometric statistics
-- 📦 Export of:
-  - segmentation overlays
-  - Excel reports
-  - CVAT-compatible annotations
+- 📦 Export CVAT-compatible annotations
 - 📏 Automatic and manual image scale detection
-- 🌐 Interactive Streamlit interface
 
----
+<p align="center">
+  <img src=".streamlit/images/interface.png" width="900">
+</p>
 
 ## Installation
 
@@ -38,9 +32,7 @@ Create a virtual environment
 python -m venv .venv
 ```
 
-Activate it
-
-Windows
+Activate it (Windows)
 
 ```bash
 .venv\Scripts\activate
@@ -58,8 +50,6 @@ Install dependencies
 pip install -r requirements.txt
 ```
 
----
-
 ## Usage
 
 Run the application
@@ -74,7 +64,6 @@ The application will become available at
 http://localhost:8501
 ```
 
----
 
 ## Workflow
 
@@ -84,25 +73,6 @@ http://localhost:8501
 4. Adjust morphometric filters.
 5. Review statistics.
 6. Export the processed results or CVAT annotations.
-
----
-
-## Repository structure
-
-```
-BiofilmAnalyzer/
-│
-├── app.py
-├── core/
-├── models/
-├── segmentation/
-├── styles/
-├── utils/
-├── requirements.txt
-└── README.md
-```
-
----
 
 ## Citation
 
@@ -128,10 +98,3 @@ BibTeX
 }
 ```
 
----
-
-## License
-
-This project is distributed under the **PolyForm Strict License 1.0.0**.
-
-See the `LICENSE` file for details.
