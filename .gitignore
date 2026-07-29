@@ -9,7 +9,7 @@ __pycache__/
 *.pyc
 *.sln
 *.pyproj
-*.bmp
+
 #.streamlit/
 
 *.bat
