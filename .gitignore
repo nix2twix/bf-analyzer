@@ -11,7 +11,7 @@ __pycache__/
 *.pyproj
 *.bmp
 #.streamlit/
-userGuide/
+
 *.bat
 # User-specific files
 *.rsuser
