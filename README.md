@@ -1,12 +1,11 @@
 # 🧪 Biofilm Analyzer
 
-Biofilm Analyzer is an interactive web application for semantic segmentation and morphometric analysis of scanning electron microscopy (SEM) images of bacterial biofilms.
+Biofilm Analyzer is an interactive web application for semantic segmentation and morphometric analysis of scanning electron microscopy (SEM) images of bacterial biofilms. It's available online at [tsu.tula.ctss/biofilms](http://80.78.198.102:8080/biofilms/).
 
 The application combines deep learning-based segmentation with semantic filtering of connected components, allowing researchers to visualize segmentation results, interactively filter detected objects, calculate morphometric statistics, and export annotations in CVAT format.
 
 ## Features
 
-- 🔬 Semantic segmentation of SEM images
 - 🧫 Support for multiple bacterial morphologies
 - ⚙️ Interactive filtering 
 - 📊 Automatic morphometric statistics
@@ -38,7 +37,7 @@ Activate it (Windows)
 .venv\Scripts\activate
 ```
 
-Linux
+Activate it (Linux)
 
 ```bash
 source .venv/bin/activate
@@ -58,21 +57,9 @@ Run the application
 streamlit run app.py
 ```
 
-The application will become available at
-
-```
-http://localhost:8501
-```
-
-
-## Workflow
-
-1. Upload an SEM image.
-2. Select the bacterial morphology model.
-3. Run segmentation.
-4. Adjust morphometric filters.
-5. Review statistics.
-6. Export the processed results or CVAT annotations.
+The application will become available at http://localhost:8501. 
+You can check the extra/userGuide if you need more information.
+Also in extra/examples you can find some test SEM-images, more are available [here](https://disk.yandex.ru/d/sp1UwEoEBgbyCw).
 
 ## Citation
 
