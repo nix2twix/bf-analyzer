@@ -1,12 +1,11 @@
 # 🧪 Biofilm Analyzer
 
-Biofilm Analyzer is an interactive web application for semantic segmentation and morphometric analysis of scanning electron microscopy (SEM) images of bacterial biofilms.
+Biofilm Analyzer is an interactive web application for semantic segmentation and morphometric analysis of scanning electron microscopy (SEM) images of bacterial biofilms. It's available online at [tsu.tula.ctss/biofilms](http://80.78.198.102:8080/biofilms/).
 
 The application combines deep learning-based segmentation with semantic filtering of connected components, allowing researchers to visualize segmentation results, interactively filter detected objects, calculate morphometric statistics, and export annotations in CVAT format.
 
 ## Features
 
-- 🔬 Semantic segmentation of SEM images
 - 🧫 Support for multiple bacterial morphologies
 - ⚙️ Interactive filtering 
 - 📊 Automatic morphometric statistics
