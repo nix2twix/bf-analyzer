@@ -1,5 +1,11 @@
+[server]
+	headless = true
+	address = "127.0.0.1"
+	port = 8501
+	baseUrlPath = "biofilms"
+
 [theme]
-base = "dark"
-primaryColor = "#24b353"
-backgroundColor = "#0E1117"
-secondaryBackgroundColor = "#262730" 
+	base = "dark"
+	primaryColor = "#24b353"
+	backgroundColor = "#0E1117"
+	secondaryBackgroundColor = "#262730"
