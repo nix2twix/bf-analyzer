@@ -13,6 +13,9 @@ The application combines deep learning-based segmentation with semantic filterin
 - 📦 Export CVAT-compatible annotations
 - 📏 Automatic and manual image scale detection
 
+<p align="center">
+  <img src=".streamlit/images/interface.png" width="900">
+</p>
 
 ## Installation
 
