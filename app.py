@@ -146,7 +146,7 @@ with blockWorkspace:
     
     # Помощь
     with st.expander("❓ Help", expanded=False):
-        st.markdown("<p>1. You can check user manual <a href='https://disk.yandex.ru/i/67FqW7pGcJ6ELg'>here</a>.</p>", 
+        st.markdown("<p>1. You can check user manual <a href='https://disk.yandex.ru/d/SHoSu6qIvqi62w'>here</a>.</p>", 
                     unsafe_allow_html=True)
         st.markdown("<p>2. An examples of SEM-images is available <a href='https://disk.yandex.ru/d/sp1UwEoEBgbyCw'>here</a>.</p>", 
                     unsafe_allow_html=True)
