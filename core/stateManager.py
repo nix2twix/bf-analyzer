@@ -131,7 +131,6 @@ class StateManager:
                         self.state.model_config
                     )
                     self.update_area_stats(objects_info, area_stats, preserve_filters=True)
-                    self.state.filteredObjects = None
                     self.apply_filtration()
                     self._clear_image_cache()
     
@@ -152,8 +151,6 @@ class StateManager:
             current_min = current_max
 
         self.state.filtration_params[param_name] = {"min": current_min, "max": current_max}
-        widget_key = f"slider_{param_name}_{self.state.get('modelType', '')}"
-        self.state[widget_key] = (float(current_min), float(current_max))
     
     def update_filter_parameter(self, param_name: str, value: dict):
         """Обновление параметра фильтрации (ожидает словарь с min/max)"""

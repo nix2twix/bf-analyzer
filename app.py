@@ -5,7 +5,7 @@ import streamlit as st
 from segmentation.objects import prepareFilteredObjectInfo
 from segmentation.statistics import calculateStatistics
 
-from utils.converter import makeCVATbackupRLE
+from utils.exporter import makeCVATbackup
 
 from styles.styles import loadStyles, loadFooter
        
@@ -22,6 +22,7 @@ handlers = AppHandlers(state_manager)
 ui = UIComponents(state_manager)
 
 # === HEADER ===
+st.markdown("")
 st.header("🧪 Biofilm Analyzer", anchor=False)
 st.markdown("This tool is designed for processing SEM images of biofilms")
 st.markdown('<hr style="margin: 0rem 0;">', unsafe_allow_html=True)
@@ -84,6 +85,7 @@ with blockTools:
             st.markdown("📊 Statistics")
 
         if state_manager.state.filteredObjects is None:
+            st.markdown("")
             st.info("No results for statistics calculation.")
         else:
             with filtrationCol:
@@ -92,8 +94,9 @@ with blockTools:
                     handlers.handle_filtration(filter_params)
             
             with statCol:
-                state_manager.state.filteredObjectsInfo = prepareFilteredObjectInfo(
-                    state_manager.state.filteredObjects
+                if state_manager.state.filteredObjectsInfo is None:
+                    state_manager.state.filteredObjectsInfo = prepareFilteredObjectInfo(
+                        state_manager.state.filteredObjects
                 )
                 resultInfo = calculateStatistics(
                     state_manager.state.filteredObjectsInfo,
@@ -115,7 +118,7 @@ with blockTools:
         if state_manager.state.uploadedImage is not None:
             uploadedAnn = ui.render_annotation_uploader_only()
             if uploadedAnn and uploadedAnn != state_manager.state.get("last_uploaded_ann"):
-                state_manager.state.polygonsCVAT = makeCVATbackupRLE(
+                state_manager.state.polygonsCVAT = makeCVATbackup(
                     state_manager.state.uploadedImage,
                     state_manager.state.imageName,
                     {},

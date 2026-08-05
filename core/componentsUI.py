@@ -238,6 +238,7 @@ class UIComponents:
             
         if postsegmentation_toggle != current_value:
             self.state.toggle_postsegmentation(postsegmentation_toggle)
+            st.rerun()
 
     def render_scale_bar(self):
         """Метод для отрисовки информации о масштабе"""

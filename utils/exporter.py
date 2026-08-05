@@ -1,14 +1,12 @@
 ﻿# === LIBRARIES GENERAL ===
 import io
 import os
-import re
 import cv2
 import json
 import zipfile
 
 import numpy as np
 import pandas as pd
-import streamlit as st
 import xml.etree.ElementTree as ET
 
 from PIL import Image
@@ -20,144 +18,9 @@ from openpyxl.styles import (
     Alignment
 )
 from openpyxl.utils import get_column_letter
+from utils.rle import rle_encode
 
-
-def rle_encode(mask: np.ndarray, left: int, top: int, right: int, bottom: int):
-    pixels = mask.flatten(order="C")
-    diff = np.diff(pixels)
-    change_idx = np.where(diff != 0)[0] + 1
-    splits = np.split(pixels, change_idx)
-
-    result = [(block[0], len(block)) for block in splits]
-
-    rle = []
-    idx = 0
-    for val, count in result:
-        if idx == 0:
-            if val == 1:  
-                rle.append(0)              
-                rle.append(float(count))  
-            else:
-                rle.append(float(count))
-            idx = 1
-        else:
-            rle.append(count)
-
-    # bbox
-    rle.extend([float(left), float(top), float(right), float(bottom)])
-    return rle
-
-
-def rle_decode(rle_str, shape):
-    rle_numbers = [int(num) for num in re.findall(r'\d+', rle_str)]
-    img = np.zeros(shape[0] * shape[1], dtype=np.uint8)
-
-    index = 0
-    i = 0
-    n = len(rle_numbers)
-
-    while i < n:
-        start = rle_numbers[i]
-        i += 1
-        length = 0
-        if i < n:
-            length = rle_numbers[i]
-            i += 1
-        index += start
-        if length > 0:
-            if index + length > img.size:
-                raise ValueError(f"RLE segment exceeds mask size: index {index} length {length} size {img.size}")
-            img[index:index+length] = 1
-            index += length
-    return img.reshape(shape)
-
-def loadMasksFromZip(uploaded_zip, imgWidth, imgHeight, model_config):
-    if uploaded_zip is None:
-        return None
-
-    try:
-        with zipfile.ZipFile(uploaded_zip) as z:
-            xml_filename = next((name for name in z.namelist() if name.lower().endswith('.xml')), None)
-            if xml_filename is None:
-                print("No XML file found in the uploaded ZIP archive.")
-                return None
-            
-            with z.open(xml_filename) as xml_file:
-                xml_bytes = xml_file.read()
-                predicted_objects = updateMaskCVAT(xml_bytes, imgWidth, imgHeight, model_config)
-                return predicted_objects
-
-    except zipfile.BadZipFile:
-        print("Uploaded file is not a valid ZIP archive.")
-        return None
-
-
-def updateMaskCVAT(xml_path, width, height, model_config):
-    """
-    Обновление масок из CVAT XML с использованием конфига модели
-    """
-    # Строим обратный маппинг: cvat_label -> internal_class
-    label_map = {}
-    if model_config and model_config.cvat_labels:
-        for internal_class, cvat_label in model_config.cvat_labels.items():
-            label_map[cvat_label] = internal_class
-
-    xml_io = io.BytesIO(xml_path)
-    tree = ET.parse(xml_io)
-    root = tree.getroot()
-
-    # Инициализируем маски для всех классов кроме фона
-    masks = {}
-    next_obj_id = {}
-    for class_name in model_config.class_labels.keys():
-        if "background" not in class_name and class_name != "bg":
-            masks[class_name] = np.zeros((height, width), dtype=np.uint16)
-            next_obj_id[class_name] = 1
-
-    for image in root.findall('image'):
-        for obj in list(image):
-            label = obj.attrib.get('label')
-            if label not in label_map:
-                continue
-
-            class_key = label_map[label]
-
-            if obj.tag == 'mask':
-                # ==== RLE ====
-                rle = obj.attrib['rle']
-                left = int(obj.attrib.get('left', 0))
-                top = int(obj.attrib.get('top', 0))
-                w = int(obj.attrib.get('width', 0))
-                h = int(obj.attrib.get('height', 0))
-
-                decoded = rle_decode(rle, (h, w)).astype(np.uint8)
-                if np.any(decoded):
-                    obj_id = next_obj_id[class_key]
-                    masks[class_key][top:top+h, left:left+w][decoded > 0] = obj_id
-                    next_obj_id[class_key] += 1
-
-            elif obj.tag == 'polygon':
-                # ==== Полигоны ====
-                points_str = obj.attrib['points']
-                pts = []
-                for p in points_str.split(';'):
-                    x, y = map(float, p.split(','))
-                    pts.append([int(round(x)), int(round(y))])
-                pts = np.array(pts, dtype=np.int32)
-
-                obj_id = next_obj_id[class_key]
-                cv2.fillPoly(masks[class_key], [pts], color=obj_id)
-                next_obj_id[class_key] += 1
- 
-    # Выводим статистику
-    for class_name, mask in masks.items():
-        unique_ids = np.unique(mask)
-        obj_count = len(unique_ids[unique_ids != 0])
-
-    return masks
-
-@st.cache_data(show_spinner=False, ttl=6000, max_entries=10) 
-def makeCVATbackupRLE(
+def makeCVATbackup(
     image: Image.Image,
     original_filename: str,
     filtered_objects: dict,
@@ -236,7 +99,6 @@ def makeCVATbackupRLE(
                 
             top, left = ys.min(), xs.min()
             bottom, right = ys.max(), xs.max()
-            w, h = right - left + 1, bottom - top + 1
 
             crop = obj_mask[top:bottom + 1, left:right + 1]
             points = rle_encode(crop, left, top, right, bottom)
@@ -271,8 +133,7 @@ def makeCVATbackupRLE(
     zip_buffer.seek(0)
     return zip_buffer
 
-@st.cache_data(show_spinner=False, ttl=6000, max_entries=10) 
-def makeXMLforCVAT(image_name, image_width, image_height, labels, masks, crop_bottom=120):
+def makeXMLforCVAT(image_name, image_width, image_height, labels, masks):
     """
     labels: [{"name": str, "color": str}]
     masks: [{"label": str, "mask": np.ndarray, "z_order": int}]
@@ -343,7 +204,6 @@ def makeXMLforCVAT(image_name, image_width, image_height, labels, masks, crop_bo
 
     return ET.tostring(root, encoding="utf-8", xml_declaration=True).decode("utf-8")
 
-@st.cache_data(show_spinner=False, ttl=6000, max_entries=10) 
 def saveResultsAsZip(filteredObjects, classColors, drawImgPIL, 
                      filteredObjectsInfo=None, scale=None, 
                      imgWidth=None, imgHeight=None, infoLineHeight=None,

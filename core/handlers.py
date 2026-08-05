@@ -6,19 +6,16 @@ import numpy as np
 from core.stateManager import StateManager
 from segmentation.inference import segmentationImage
 from segmentation.objects import (
-    groupObjectsByClass,
-    getPredictedObjects,
     prepareObjectInfo
 )
-from segmentation.filtration import filtrationObjects
 from utils.drawing import checkSize, correctSize
 from utils.autoscale import estimateScale
-from utils.converter import loadMasksFromZip, makeCVATbackupRLE, saveResultsAsZip
+from utils.importer import loadMasksFromZip
+from utils.exporter import makeCVATbackup, saveResultsAsZip
 
 
 class AppHandlers:
     """Обработчики событий приложения"""
-    
     def __init__(self, state_manager: StateManager):
         self.state = state_manager
     
@@ -88,7 +85,7 @@ class AppHandlers:
         return True
 
     def handle_segmentation(self):
-        """Обработка сегментации - сохраняет оба варианта масок"""
+        """Обработка сегментации"""
     
         if self.state.state.get("segmentation_in_progress", False):
             st.warning("Segmentation is already running. Please wait...")
@@ -117,7 +114,6 @@ class AppHandlers:
 
             info_line_height = self.state.state.infoLineHeight or 0
 
-            # ВЫЗЫВАЕМ НОВУЮ ВЕРСИЮ - получаем оба варианта
             postprocessed_masks, raw_masks, probs = segmentationImage(
                 uploaded_file=self.state.state.uploadedImage,
                 INFLINEPX=info_line_height,
@@ -173,9 +169,7 @@ class AppHandlers:
     
     def handle_statistics_update(self):
         """Обработка обновления статистики"""
-
         if self.state.state.predictedObjects is not None:
-            # Пересчитываем objectsInfo если нужно
             if self.state.state.objectsInfo is None:
                 objects_info, area_stats = prepareObjectInfo(
                     self.state.state.predictedObjects, 
@@ -183,33 +177,16 @@ class AppHandlers:
                 )
                 self.state.update_area_stats(objects_info, area_stats)
     
-            # Применяем фильтры если они есть и filteredObjects ещё не созданы
-            if self.state.state.filtration_params and self.state.state.filteredObjects is None:
-                self.state.state.filteredObjects = filtrationObjects(
-                    self.state.state.objectsInfo,
-                    self.state.state.predictedObjects,
-                    self.state.state.filtration_params,
-                    self.state.state.model_config
-                )
-            elif not self.state.state.filtration_params and self.state.state.filteredObjects is None:
-                # Если фильтров нет, filteredObjects = predictedObjects
-                self.state.state.filteredObjects = self.state.state.predictedObjects
-            
-            # Сбрасываем filteredObjectsInfo для пересчета
-            self.state.state.filteredObjectsInfo = None
-            self.state.invalidate_export()
+        self.state.apply_filtration()
             
     def handle_filtration(self, filter_params=None):
-        """Обработка фильтрации"""
-        #filename = self.state.state.imageName
-        
+        """Обработка фильтрации"""      
         if self.state.state.predictedObjects is not None:
             if filter_params and self.state.update_filtration_params(filter_params):
                 self.state.apply_filtration()
             
     def prepare_export_data(self):
         """Подготовка данных для экспорта"""
-
         if self.state.state.filteredObjects is not None:
             from segmentation.objects import prepareFilteredObjectInfo
             from segmentation.statistics import calculateStatistics
@@ -226,7 +203,7 @@ class AppHandlers:
                 self.state.state.classColors,
                 self.state.state.isShowIntermediate,
             )
-            self.state.state.polygonsCVAT = makeCVATbackupRLE(
+            self.state.state.polygonsCVAT = makeCVATbackup(
                 self.state.state.uploadedImage,
                 self.state.state.imageName,
                 self.state.state.filteredObjects,
