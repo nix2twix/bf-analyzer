@@ -46,9 +46,9 @@ BACILLUS_CONFIG = ModelConfig(
     class_names=["bg", "biofilm", "intermediate", "single"],
     num_classes=4,
     class_colors={
-        "biofilm": (36, 179, 83, 178),
-        "intermediate": (221, 255, 51, 178),
-        "single": (184, 61, 245, 178)
+        "biofilm": (36, 179, 83, 90),
+        "intermediate": (221, 255, 51, 90),
+        "single": (184, 61, 245, 90)
     },
     checkpoint_path=os.path.join(MODELS_DIR, "bacillus.pth"),
     class_labels={"bg": 0, "biofilm": 1, "intermediate": 2, "single": 3},
@@ -95,8 +95,8 @@ COCCUS_CONFIG = ModelConfig(
     class_names=["background", "biofilm", "planktonic"],
     num_classes=3,
     class_colors={
-        "biofilm": (18, 225, 249, 178),
-        "planktonic": (14, 101, 235, 178)
+        "biofilm": (18, 225, 249, 90),
+        "planktonic": (14, 101, 235, 90)
     },
     checkpoint_path=os.path.join(MODELS_DIR, "coccus.pth"),
     class_labels={"background": 0, "biofilm": 1, "planktonic": 2},

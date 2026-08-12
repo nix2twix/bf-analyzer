@@ -1,5 +1,4 @@
 streamlit==1.60.0
-streamlit-image-coordinates==0.4.0
 pandas==2.3.3
 numpy==2.4.4
 torch==2.11.0
@@ -13,6 +12,6 @@ scikit-image==0.26.0
 scikit-learn==1.8.0
 glob2==0.7
 segmentation-models-pytorch==0.5.0
-stqdm==0.2.0
 easyocr==1.7.2
 openpyxl==3.1.5
+streamlit-image-overlay

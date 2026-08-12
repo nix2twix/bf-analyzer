@@ -1,5 +1,6 @@
 # === LIBRARIES GENERAL ===
 import streamlit as st
+from streamlit_image_overlay import streamlit_image_overlay as overlay 
 
 # === PROJECT SCRIPTS ===
 from segmentation.objects import prepareFilteredObjectInfo
@@ -103,11 +104,11 @@ with blockTools:
                     scale=state_manager.state.imgScale
                 )
                 
-                imgArea = (state_manager.state.imgWidth * 
+                state_manager.state.imgArea = (state_manager.state.imgWidth * 
                           (state_manager.state.imgHeight - state_manager.state.infoLineHeight) *
                           (state_manager.state.imgScale ** 2))
                 
-                ui.render_statistics_content(statCol, resultInfo, imgArea)
+                ui.render_statistics_content(statCol, resultInfo, state_manager.state.imgArea)
                 st.markdown("📊 Tools")
                 st.markdown("")
                 ui.render_postprocess_toggle()
@@ -145,8 +146,13 @@ with blockTools:
 # === Левая панель: Workflow ===
 with blockWorkspace:
     # Отрисовка рабочей области
-    processed_image_full = ui.render_workflow_area()
-    
+    if state_manager.state.uploadedImage:
+        overlay(state_manager.state.uploadedImage, 
+                overlays=state_manager.state.overlays,
+                styles=state_manager.state.overlayStyles,
+            )
+                    
+
     # Помощь
     with st.expander("❓ Help", expanded=False):
         st.markdown("<p>1. You can check user manual <a href='https://disk.yandex.ru/d/SHoSu6qIvqi62w'>here</a>.</p>", 

@@ -17,7 +17,7 @@ def normalizeScaleBar(c_fullImage, lowerBound = None, bright_threshold=240):
     scale_region = img_normalized[lowerBound:, :]
 
     mask_bright = scale_region > bright_threshold
-    scale_region[:] = 0 #обнуляем темное
+    scale_region[:] = 0 #РѕР±РЅСѓР»СЏРµРј С‚РµРјРЅРѕРµ
     scale_region[mask_bright] = c_fullImage[lowerBound:, :][mask_bright]
 
     return img_normalized

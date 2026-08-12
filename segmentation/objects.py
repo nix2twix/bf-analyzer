@@ -13,6 +13,59 @@ def getPredictedObjects(predictedBinMasks):
         predictedObjects[className] = labeled_img
     return predictedObjects
 
+def labeledMaskToOverlays(predictedObjects, objectsInfo, scale):
+    overlays = []
+    for className, labeled_img in predictedObjects.items():
+        for objectId in range(1, labeled_img.max() + 1):
+            index = {}
+            for class_name, objs in objectsInfo.items():
+                for obj in objs:
+                    index[(class_name, obj["id"])] = obj
+    
+            mask = (labeled_img == objectId).astype(np.uint8)
+
+            contours, _ = cv2.findContours(
+                mask,
+                cv2.RETR_CCOMP,
+                cv2.CHAIN_APPROX_NONE,
+            )
+
+            if len(contours) == 0:
+                continue
+
+            path = ""
+
+            for contour in contours:
+                if len(contour) < 3:
+                    continue
+
+                points = contour[:, 0, :]
+
+                path += f"M {points[0][0]} {points[0][1]}"
+
+                for x, y in points[1:]:
+                    path += f" L {x} {y}"
+
+                path += " Z"
+
+            areaInPx = index.get((className, objectId), {}).get("area")
+            areaScaled = areaInPx * (scale ** 2)
+
+            overlays.append({
+                "id": f"{objectId}_{className}",
+                "type": "path",
+                "class": className,
+                "data": {
+                    "d": path,
+                },
+                "tooltip": (
+                    f"ID: {objectId}\n",
+                    f"Class: {className}\n",
+                    f"Area: {areaScaled:.2f} μm²"
+                ),
+            })
+    return overlays
+
 @st.cache_data(show_spinner=False, ttl=6000, max_entries=10)    
 def prepareObjectInfo(predictedLabels, model_config):
     """
@@ -65,6 +118,7 @@ def prepareFilteredObjectInfo(filteredObjects):
         } for prop in props]
         
         filteredObjectsInfo[className] = class_objects
+        
     return filteredObjectsInfo
 
 def groupObjectsByClass(binObjectsInfo, classLabels):

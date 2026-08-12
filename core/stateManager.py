@@ -7,7 +7,10 @@ from typing import Optional, Dict
 # === PROJECT SCRIPTS ===
 from models.configs import MODEL_CONFIGS, ModelConfig
 from segmentation.filtration import filtrationObjects
-
+from segmentation.objects import (
+    labeledMaskToOverlays,
+    getPredictedObjects
+)
 class StateManager:
     """Управляет состоянием приложения"""
     def __init__(self):
@@ -35,6 +38,7 @@ class StateManager:
         self.state.uploadedImage = None
         self.state.imgWidth = 0
         self.state.imgHeight = 0
+        self.state.imgArea = 0
         self.state.scaleInfo = None
         self.state.imgScale = None
         self.state.scaleText = None
@@ -54,7 +58,8 @@ class StateManager:
         self.state.objectsInfo = None
         self.state.filteredObjectsInfo = None
         self.state.modelType = "Bacillus"
-        
+        self.state.overlays = [] 
+
         # FILTRATION 
         self.state.filtration_params = {}
         self.state.slider_ranges = {}  
@@ -62,6 +67,8 @@ class StateManager:
         
         # VIZUALIZATION
         self.state.isShowIntermediate = True
+        self.state.overlayStyles = self._get_overlay_styles("Bacillus")
+        
         self.state.classColors = self._get_model_colors("Bacillus")
         
         # EXPORT
@@ -187,9 +194,46 @@ class StateManager:
             "intermediate": (221, 255, 51, 178),
             "single": (184, 61, 245, 178)
         }
-    
+    def _get_overlay_styles(self, model_name: str) -> dict:
+        config = MODEL_CONFIGS.get(model_name)
+
+        if config is None:
+            return {}
+
+        return {
+            "viewport": {
+                "outline": "none",
+                "border": "1px solid #555",
+                "borderRadius": "10px",
+            },
+
+            "path": {
+                "default": {
+                    "stroke": "blue",
+                    "strokeWidth": 2,
+                },
+
+                "class": {
+                    className: {
+                        "stroke": f"rgb({r}, {g}, {b})",
+                        "strokeWidth": 4,
+                        "fill": f"rgba({r}, {g}, {b}, {a / 255:.3f})",
+                    }
+                    for className, (r, g, b, a)
+                    in config.class_colors.items()
+                },
+            },
+
+            "tooltip": {
+                "backgroundColor": "black",
+                "color": "white",
+                "borderRadius": "10px",
+                "padding": "13px",
+                "fontSize": "13px",
+                "whiteSpace": "pre-line",
+            },
+        }
     def set_model(self, model_name: str) -> bool:
-        """Смена модели - динамически"""
         if model_name == self.state.get("modelType"):
             return False
 
@@ -198,7 +242,8 @@ class StateManager:
         
         # Обновляем цвета
         self.state.classColors = self._get_model_colors(model_name)
-        
+        self.state.overlayStyles = self._get_overlay_styles(model_name)
+
         # Переинициализируем параметры фильтрации
         self._init_dynamic_filtration_settings()
         
@@ -218,6 +263,7 @@ class StateManager:
         self.state.objectsInfo = None
         self.state.filteredObjectsInfo = None
         self.state.isShowIntermediate = True
+        self.state.overlays = []
         self.invalidate_export()
         self.state.postprocessed_masks = None
         self.state.raw_masks = None
@@ -354,7 +400,7 @@ class StateManager:
                 params=self.state.filtration_params,
                 model_config=config 
             )
-    
+
             self.state.filteredObjectsInfo = None
             self.invalidate_export()
             # Очищаем кэш изображений при изменении фильтрации
@@ -364,3 +410,11 @@ class StateManager:
             self.state.filteredObjectsInfo = None
             self.invalidate_export()
             self._clear_image_cache()
+
+        predictedObjects = getPredictedObjects(self.state.filteredObjects)
+    
+        self.state.overlays = labeledMaskToOverlays(predictedObjects,
+                    self.state.objectsInfo,
+                    self.state.imgScale
+            )
+            

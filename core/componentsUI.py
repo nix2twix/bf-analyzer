@@ -1,6 +1,6 @@
 import numpy as np
 import streamlit as st
-
+from PIL import Image
 from datetime import datetime
 from typing import Dict, Any, Optional
 from core.factoryUI import ModelUIFactory
@@ -54,15 +54,15 @@ class UIComponents:
                     display_image = st.session_state.image_cache[cache_key]
             
                 # Адаптивное отображение
-                st.image(display_image, width='stretch')
+                #st.image(display_image, width='stretch')
                 return display_image
             else:
                 st.warning("⚠️ No objects found after filtering")
-                st.image(
-                    self.state.state.uploadedImage,
-                    width='stretch'
-                )
-                return None
+                # st.image(
+                #     self.state.state.uploadedImage,
+                #     width='stretch'
+                # )
+                return Image.open(self.state.state.uploadedImage)
         else:
             cache_key = f"orig_{self.state.state.imageName}"
             if cache_key not in st.session_state.image_cache:
@@ -74,11 +74,11 @@ class UIComponents:
             else:
                 display_image = st.session_state.image_cache[cache_key]
             
-            st.image(
-                display_image,
-                width='stretch'
-            )
-            return None
+            # st.image(
+            #     display_image,
+            #     width='stretch'
+            # )
+            return display_image
     
     def render_workflow_area_mini(self) -> Optional[Any]:
         """Мини-версия для контекста экспорта (без отрисовки, только возврат изображения)"""

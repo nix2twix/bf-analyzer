@@ -135,13 +135,14 @@ class AppHandlers:
                 self.state.state.predictedObjects = postprocessed_masks
             else:
                 self.state.state.predictedObjects = raw_masks
-        
+
             # Подсчет объектов
             total_objects = 0
             for class_name, mask in self.state.state.predictedObjects.items():
                 if class_name not in ["bg", "background"]:
                     num_objects = len(np.unique(mask)) - 1
                     total_objects += num_objects
+
         
             # Подготовка информации об объектах
             self.state.state.objectsInfo, area_stats = prepareObjectInfo(

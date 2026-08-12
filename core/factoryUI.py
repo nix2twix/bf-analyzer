@@ -87,13 +87,8 @@ class ModelUIFactory:
                 if class_name in param_name:
                     color = hex_color
                     break
-
-            # Уникальный ключ
-            # Object identity changes with a new segmentation, without
-            # serializing all mask arrays on every rerun just to build a key.
             key = f"slider_{param_name}_{state.get('modelType', '')}"
 
-            # Добавляем CSS правило для цвета
             css_rules.append(f"""
                 div[data-testid="stSlider"][data-key="{key}"] [role="slider"] {{
                     background-color: {color} !important;
