@@ -29,7 +29,7 @@ st.markdown("This tool is designed for processing SEM images of biofilms")
 st.markdown('<hr style="margin: 0rem 0;">', unsafe_allow_html=True)
 
 # === INTERFACE ===
-blockWorkspace, gap, blockTools = st.columns([2.3, 0.1, 1.3])
+blockWorkspace, gap, blockTools = st.columns([2.5, 0.01, 1.0    ])
 
 with blockTools:
     tabsTools = st.tabs(["🔬 Segmentation", "📊 Statistics & Tools"])

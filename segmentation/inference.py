@@ -92,7 +92,7 @@ def simple_labeling(processedMask):
     return labeled_masks
 
 
-@st.cache_data(show_spinner=False, ttl=6000, max_entries=10) 
+@st.cache_data(show_spinner=False, max_entries=10) 
 def segmentationImage(
     uploaded_file, 
     INFLINEPX, 
@@ -122,7 +122,7 @@ def segmentationImage(
     # Фрагментирование с шагом stride
     if height > 512 and width > 512:
         imgPatches, patchesInfo = makePatches(
-            croppedImg, patch_size=(512, 512), stride=(512, 512)
+            croppedImg, patch_size=(512, 512), stride=(256, 256)
         )
     else:
         imgPatches = [croppedImg]
