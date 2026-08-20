@@ -9,7 +9,8 @@ class ModelUIFactory:
     """Фабрика для создания UI-элементов специфичных для модели"""
     
     @staticmethod
-    def _on_slider_change(param_name: str, state: Dict):
+    def _on_slider_change(param_name: str, state: Dict, scale: float):
+        
         """Callback для обновления параметров сразу при изменении слайдера"""
         def callback():
             # Получаем текущее значение слайдера из session_state
@@ -23,25 +24,44 @@ class ModelUIFactory:
                     }
                     state["filters_dirty"] = True
         return callback
-    
+
+
     @staticmethod
-    def create_filtration_ui(config: ModelConfig, state: Dict) -> Dict:
-        """Динамическое создание UI фильтрации на основе конфига"""
+    def _area_px_to_um2(value, scale):
+        if scale is None:
+            return value
+        return value * scale ** 2
+
+
+    @staticmethod
+    def _area_um2_to_px(value, scale):
+        if scale is None or scale == 0:
+            return value
+        return value / scale ** 2
+    
+
+    @staticmethod
+    def create_filtration_ui(config: ModelConfig, state: Dict, scale: float) -> Dict:
+        """Динамическое создание UI фильтрации на основе конфига."""
+
         params = {}
         css_rules = []
 
         if "slider_ranges" not in state:
             state["slider_ranges"] = {}
-        if "filtration_params" not in state:  
+
+        if "filtration_params" not in state:
             state["filtration_params"] = {}
 
         css_rules.append("""
             div[data-testid="stSlider"] {
                 pointer-events: auto !important;
             }
+
             div[data-testid="stSlider"] > div {
                 pointer-events: auto !important;
             }
+
             div[data-testid="stSlider"] [role="slider"] {
                 pointer-events: auto !important;
                 cursor: pointer !important;
@@ -49,44 +69,77 @@ class ModelUIFactory:
         """)
 
         for param_name, (min_default, max_default) in config.filtration_params.items():
-            # Получаем диапазон слайдера из состояния
+
+            # ---------------------------------------------------------
+            # Диапазон фильтра в пикселях
+            # ---------------------------------------------------------
             if param_name in state["slider_ranges"]:
                 slider_min, slider_max = state["slider_ranges"][param_name]
+
                 if slider_min >= slider_max:
                     slider_min, slider_max = min_default, max_default
             else:
                 slider_min, slider_max = min_default, max_default
 
-            # Получаем текущее значение из filtration_params
-            if param_name in state["filtration_params"]:
-                current = state["filtration_params"][param_name]
-                if isinstance(current, dict):
-                    current_min = current.get('min', slider_min)
-                    current_max = current.get('max', slider_max)
-                else:
-                    current_min = slider_min
-                    current_max = current
+            slider_min = float(slider_min)
+            slider_max = float(slider_max)
+
+            # ---------------------------------------------------------
+            # Текущее значение фильтра в пикселях
+            # ---------------------------------------------------------
+            current = state["filtration_params"].get(param_name)
+
+            if isinstance(current, dict):
+                current_min = current.get("min", slider_min)
+                current_max = current.get("max", slider_max)
             else:
                 current_min = slider_min
                 current_max = slider_max
 
-            # Корректируем значения
+            current_min = float(current_min)
+            current_max = float(current_max)
+
+            # Ограничиваем текущие значения диапазоном
             current_min = max(slider_min, min(current_min, slider_max))
-            current_max = min(slider_max, max(current_min, current_max))
+            current_max = max(current_min, min(current_max, slider_max))
 
-            # Определяем тип параметра
+            # ---------------------------------------------------------
+            # Тип параметра
+            # ---------------------------------------------------------
             is_area = "area" in param_name
-            step = 1.0 if is_area else 0.01
 
-            # Красивое имя
-            display_name = param_name.replace("_", " ").title()
+            # ---------------------------------------------------------
+            # Перевод px² → μm² только для отображения
+            # ---------------------------------------------------------
+            if is_area and scale is not None and scale > 0:
+                factor = float(scale ** 2)
 
-            # Определяем цвет
+                display_min = slider_min * factor
+                display_max = slider_max * factor
+
+                display_current_min = current_min * factor
+                display_current_max = current_max * factor
+
+                step = factor
+            else:
+                display_min = slider_min
+                display_max = slider_max
+
+                display_current_min = current_min
+                display_current_max = current_max
+
+                step = 1.0 if is_area else 0.01
+
+
+            # Цвет
             color = "#24b353"
+
             for class_name, (title, hex_color) in config.class_titles.items():
                 if class_name in param_name:
                     color = hex_color
                     break
+
+            # Уникальный ключ
             key = f"slider_{param_name}_{state.get('modelType', '')}"
 
             css_rules.append(f"""
@@ -94,28 +147,62 @@ class ModelUIFactory:
                     background-color: {color} !important;
                     box-shadow: 0 0 0 2px {color} !important;
                 }}
-                div[data-testid="stSlider"][data-key="{key}"] [data-testid="stSliderThumbValue"] {{
+
+                div[data-testid="stSlider"][data-key="{key}"]
+                [data-testid="stSliderThumbValue"] {{
                     color: {color} !important;
                 }}
             """)
 
-            # Создаем слайдер с callback
-            params[param_name] = st.slider(
+            # Название
+
+            display_name = param_name.replace("_", " ").title()
+
+            if is_area:
+                display_name += f" ({state.get("scale_unit", "μm")}²)"
+            # Slider
+            slider_value = st.slider(
                 display_name,
-                min_value=float(slider_min),
-                max_value=float(slider_max),
-                value=(float(current_min), float(current_max)),
-                step=step,
+                min_value=float(display_min),
+                max_value=float(display_max),
+                value=(
+                    float(display_current_min),
+                    float(display_current_max)
+                ),
+                step=float(step),
                 key=key,
                 disabled=state.get("predictedObjects") is None,
             )
-            
-        # Применяем стили
+
+            # ---------------------------------------------------------
+            # ВАЖНО:
+            # переводим результат UI обратно в px²
+            # и сохраняем КАЖДЫЙ параметр
+            # ---------------------------------------------------------
+            if is_area and scale is not None and scale > 0:
+                factor = float(scale ** 2)
+
+                params[param_name] = {
+                    "min": float(slider_value[0]) / factor,
+                    "max": float(slider_value[1]) / factor,
+                }
+            else:
+                params[param_name] = {
+                    "min": float(slider_value[0]),
+                    "max": float(slider_value[1]),
+                }
+
+        # -------------------------------------------------------------
+        # CSS
+        # -------------------------------------------------------------
         if css_rules:
-            st.markdown(f"<style>{''.join(css_rules)}</style>", unsafe_allow_html=True)
+            st.markdown(
+                f"<style>{''.join(css_rules)}</style>",
+                unsafe_allow_html=True
+            )
 
         return params
-    
+
     @staticmethod
     def create_statistics_ui(config: ModelConfig, result_info: Dict, img_area: float):
         """Динамическое создание UI статистики"""

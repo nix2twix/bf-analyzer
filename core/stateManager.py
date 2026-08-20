@@ -8,7 +8,7 @@ from typing import Optional, Dict
 from models.configs import MODEL_CONFIGS, ModelConfig
 from segmentation.filtration import filtrationObjects
 from segmentation.objects import (
-    labeledMaskToOverlays,
+    getOverlaysFromMask,
     getPredictedObjects
 )
 class StateManager:
@@ -41,8 +41,10 @@ class StateManager:
         self.state.imgArea = 0
         self.state.scaleInfo = None
         self.state.imgScale = None
+        self.state.scale_unit = "μm"
         self.state.scaleText = None
         self.state.infoLineHeight = None
+        self.state.scale_overlay = []
 
         self.state.postprocessed_masks = None
         self.state.raw_masks = None
@@ -67,7 +69,8 @@ class StateManager:
         
         # VIZUALIZATION
         self.state.isShowIntermediate = True
-        self.state.overlayStyles = self._get_overlay_styles("Bacillus")
+        self.state.scaleOverlayStyles = self._getScaleOverlayStyle()
+        self.state.overlayStyles = self._getModelOverlayStyle("Bacillus")
         
         self.state.classColors = self._get_model_colors("Bacillus")
         
@@ -163,18 +166,21 @@ class StateManager:
         """Обновление параметра фильтрации (ожидает словарь с min/max)"""
         self.state.filtration_params[param_name] = value
     
-    def update_filtration_params(self, ui_params: Dict) -> bool:
-        """Update filters and report whether their values changed."""
-        changed = False
-        for param_name, (min_val, max_val) in ui_params.items():
-            value = {
-                'min': min_val,
-                'max': max_val
+    def update_filtration_params(self, ui_params: Dict):
+        for param_name, values in ui_params.items():
+            if not isinstance(values, dict):
+                continue
+
+            min_val = values.get("min")
+            max_val = values.get("max")
+
+            if min_val is None or max_val is None:
+                continue
+
+            self.state.filtration_params[param_name] = {
+                "min": float(min_val),
+                "max": float(max_val)
             }
-            if self.state.filtration_params.get(param_name) != value:
-                self.state.filtration_params[param_name] = value
-                changed = True
-        return changed
     
     def get_slider_range(self, param_name: str, default=(100, 1000)) -> tuple:
         """Получить диапазон слайдера"""
@@ -194,7 +200,37 @@ class StateManager:
             "intermediate": (221, 255, 51, 178),
             "single": (184, 61, 245, 178)
         }
-    def _get_overlay_styles(self, model_name: str) -> dict:
+
+    def _getScaleOverlayStyle(self) -> dict:
+        return {
+            "viewport": {
+                            "outline": "none",
+                            "border": "1px solid #555",
+                            "borderRadius": "10px",
+                        },
+            "path": {
+                "default": {
+                    "stroke": "#ffffff",
+                    "strokeWidth": 3,
+                },
+                "class": {
+                    "scale": {
+                        "stroke": "#ff0000",
+                        "strokeWidth": 8,
+                    }
+                }
+            },
+            "tooltip": {
+                            "backgroundColor": "black",
+                            "color": "white",
+                            "borderRadius": "10px",
+                            "padding": "13px",
+                            "fontSize": "13px",
+                            "whiteSpace": "pre-line",
+            },
+        }
+   
+    def _getModelOverlayStyle(self, model_name: str) -> dict:
         config = MODEL_CONFIGS.get(model_name)
 
         if config is None:
@@ -233,6 +269,52 @@ class StateManager:
                 "whiteSpace": "pre-line",
             },
         }
+
+    def get_scale_overlay(self):
+        """Создает overlay с распознанной масштабной шкалой."""
+
+        scale_info = self.state.scaleInfo
+        scale = self.state.imgScale
+
+        if scale_info is None or scale is None:
+            return []
+
+        # Для отрисовки нужны координаты шкалы и её длина.
+        if len(scale_info) < 4:
+            return []
+
+        y = scale_info[0]
+        x = scale_info[1]
+        length = scale_info[2]
+        text = scale_info[3]
+
+        if y is None or x is None or length is None:
+            return []
+
+        x += 0
+        y += 2
+        tick = 8
+
+        return [{
+            "id": "scale",
+            "type": "path",
+            "class": "scale",
+            "data": {
+                "d": (
+                    f"M {x} {y - tick} "
+                    f"L {x} {y + tick} "
+                    f"M {x} {y} "
+                    f"L {x + length} {y} "
+                    f"M {x + length} {y - tick} "
+                    f"L {x + length} {y + tick}"
+                )
+            },
+            "tooltip": (
+                f"Estimated scale: {scale:.4f} μm/px\n"
+                f"Recognition text: {text}"
+            )
+        }]
+    
     def set_model(self, model_name: str) -> bool:
         if model_name == self.state.get("modelType"):
             return False
@@ -242,7 +324,7 @@ class StateManager:
         
         # Обновляем цвета
         self.state.classColors = self._get_model_colors(model_name)
-        self.state.overlayStyles = self._get_overlay_styles(model_name)
+        self.state.overlayStyles = self._getModelOverlayStyle(model_name)
 
         # Переинициализируем параметры фильтрации
         self._init_dynamic_filtration_settings()
@@ -413,8 +495,36 @@ class StateManager:
 
         predictedObjects = getPredictedObjects(self.state.filteredObjects)
     
-        self.state.overlays = labeledMaskToOverlays(predictedObjects,
+        self.state.overlays = getOverlaysFromMask(predictedObjects,
                     self.state.objectsInfo,
                     self.state.imgScale
             )
             
+    @staticmethod
+    def uniteOverlayStyles(styles: list) -> dict:
+        """Объединяет стили объектов и дополнительных overlay."""
+
+        unitedStyles = {}
+
+        for style in styles:
+            if not style:
+                continue
+
+            # Копируем верхнеуровневые стили
+            for key, value in style.items():
+                if key not in unitedStyles:
+                    unitedStyles[key] = value.copy() if isinstance(value, dict) else value
+
+            # Объединяем классы path, а не заменяем их
+            if "path" in style and "class" in style["path"]:
+                if "path" not in unitedStyles:
+                    unitedStyles["path"] = {}
+
+                if "class" not in unitedStyles["path"]:
+                    unitedStyles["path"]["class"] = {}
+
+                unitedStyles["path"]["class"].update(
+                    style["path"]["class"]
+                )
+
+        return unitedStyles

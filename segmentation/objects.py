@@ -13,7 +13,7 @@ def getPredictedObjects(predictedBinMasks):
         predictedObjects[className] = labeled_img
     return predictedObjects
 
-def labeledMaskToOverlays(predictedObjects, objectsInfo, scale):
+def getOverlaysFromMask(predictedObjects, objectsInfo, scale):
     overlays = []
     for className, labeled_img in predictedObjects.items():
         for objectId in range(1, labeled_img.max() + 1):

@@ -176,10 +176,12 @@ class AppHandlers:
         self.state.apply_filtration()
             
     def handle_filtration(self, filter_params=None):
-        """Обработка фильтрации"""      
+        """Обработка фильтрации"""
         if self.state.state.predictedObjects is not None:
-            if filter_params and self.state.update_filtration_params(filter_params):
-                self.state.apply_filtration()
+            if filter_params:
+                self.state.update_filtration_params(filter_params)
+
+            self.state.apply_filtration()
             
     def prepare_export_data(self):
         """Подготовка данных для экспорта"""

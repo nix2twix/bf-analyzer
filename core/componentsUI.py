@@ -154,18 +154,19 @@ class UIComponents:
             help="Upload annotations exported from CVAT to recalculate statistics"
         )
     
-    def render_filtration_ui(self, container) -> Dict:
-        """Отрисовывает UI фильтрации в указанном контейнере"""
+    def render_filtration_ui(self, container, scale) -> Dict:
+        """Отрисовывает UI фильтрации."""
+
         config = self.state.get_config()
-    
+
         if config and self.state.state.predictedObjects is not None:
-            with container:
-                       
-                params = self.factory.create_filtration_ui(config, self.state.state)
-                if params:
-                    return params
+            return self.factory.create_filtration_ui(
+                config,
+                self.state.state,
+                scale
+            )
+
         return {}
-    
     def render_statistics_content(self, container, result_info: Dict, img_area: float):
         """Отрисовывает контент статистики"""
         config = self.state.get_config()

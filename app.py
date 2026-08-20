@@ -29,7 +29,7 @@ st.markdown("This tool is designed for processing SEM images of biofilms")
 st.markdown('<hr style="margin: 0rem 0;">', unsafe_allow_html=True)
 
 # === INTERFACE ===
-blockWorkspace, gap, blockTools = st.columns([2.5, 0.01, 1.0    ])
+blockWorkspace, gap, blockTools = st.columns([2.5, 0.01, 1.5])
 
 with blockTools:
     tabsTools = st.tabs(["🔬 Segmentation", "📊 Statistics & Tools"])
@@ -90,7 +90,11 @@ with blockTools:
             st.info("No results for statistics calculation.")
         else:
             with filtrationCol:
-                filter_params = ui.render_filtration_ui(filtrationCol)
+                filter_params = ui.render_filtration_ui(
+                    filtrationCol,
+                    state_manager.state.imgScale
+                )
+
                 if filter_params:
                     handlers.handle_filtration(filter_params)
             
@@ -112,7 +116,7 @@ with blockTools:
                 st.markdown("📊 Tools")
                 st.markdown("")
                 ui.render_postprocess_toggle()
-                ui.render_scale_bar()
+                #ui.render_scale_bar()
         # Загрузчик аннотаций
         st.markdown("📂 Import annotations")
         
@@ -147,12 +151,25 @@ with blockTools:
 with blockWorkspace:
     # Отрисовка рабочей области
     if state_manager.state.uploadedImage:
-        overlay(state_manager.state.uploadedImage, 
-                overlays=state_manager.state.overlays,
-                styles=state_manager.state.overlayStyles,
-            )
+        state_manager.state.scale_overlay = state_manager.get_scale_overlay()
 
-              
+        overlays = (
+            state_manager.state.overlays
+            + state_manager.state.scale_overlay
+        )
+
+        styles = state_manager.uniteOverlayStyles([
+            state_manager.state.overlayStyles,
+            state_manager.state.scaleOverlayStyles
+        ])
+
+        overlay(
+            state_manager.state.uploadedImage,
+            overlays=overlays,
+            styles=styles,
+            key="main-image-viewer",
+        )
+ 
     # Новости
     with st.expander("🆕 What's new?", expanded=False):
         language = st.segmented_control(
@@ -226,10 +243,10 @@ with blockWorkspace:
                 ✉️ **Contact** — pawlova12@yandex.ru
             """)
         st.markdown("")
-    if st.button("♻ Clear cache"):
-        st.cache_data.clear()
-        st.cache_resource.clear()
-        ui.clear_image_cache()
-        st.rerun()
+        if st.button("♻ Clear cache"):
+            st.cache_data.clear()
+            st.cache_resource.clear()
+            ui.clear_image_cache()
+            st.rerun()
 
 loadFooter()
