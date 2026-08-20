@@ -3,6 +3,7 @@ import numpy as np
 import streamlit as st
 
 from torch.utils.data import DataLoader
+from PIL import Image
 from .preprocessing import cropLineBelow, makePatches
 from .postprocessing import (
     smoothMask, 
@@ -91,15 +92,30 @@ def simple_labeling(processedMask):
     
     return labeled_masks
 
+@st.cache_resource(show_spinner=False)
+def get_model(model_config):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    model = buildModel(
+        classesCount=model_config.num_classes,
+        encoderName=model_config.encoder_name,
+        encoderWeights=model_config.encoder_weights,
+        activation=model_config.activation
+    ).to(device)
+
+    loadCheckpoint(model, model_config.checkpoint_path)
+    model.eval()
+
+    return model, device
 
 @st.cache_data(show_spinner=False, max_entries=10) 
 def segmentationImage(
-    uploaded_file, 
-    INFLINEPX, 
-    width, 
-    height, 
-    imgName,
-    model_config,
+    image_bytes: bytes,
+    INFLINEPX: int,
+    width: int,
+    height: int,
+    imgName: str,
+    model_config: dict,
     threshold=0
 ):
     """
@@ -113,7 +129,11 @@ def segmentationImage(
     """
     import time
     
-    origImg = uploaded_file
+    origImg = Image.frombytes(
+        "L",
+        (width, height),
+        image_bytes
+    )
     
     # Обрезка информационной строки снизу
     croppedImg = cropLineBelow(origImg, INFLINEPX)
@@ -128,21 +148,7 @@ def segmentationImage(
         imgPatches = [croppedImg]
         patchesInfo = [(0, 0, 0)]
 
-    # Устройство (GPU/CPU)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[INFO] DEVICE IS {device}")
-    print(f"[INFO] MODEL: {model_config.display_name}")
-
-    # Загрузка модели
-    model = buildModel(
-        classesCount=model_config.num_classes,
-        encoderName=model_config.encoder_name,
-        encoderWeights=model_config.encoder_weights,
-        activation=model_config.activation
-    ).to(device)
-    
-    loadCheckpoint(model, model_config.checkpoint_path)
-    model.eval()
+    model, device = get_model(model_config)
 
     # Подготовка данных
     test_dataset = TestDataset(imgPatches, patchesInfo)

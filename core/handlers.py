@@ -90,18 +90,7 @@ class AppHandlers:
         if self.state.state.get("segmentation_in_progress", False):
             st.warning("Segmentation is already running. Please wait...")
             return
-
-        try:
-            import torch
-            import gc
-    
-            st.cache_data.clear()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            gc.collect()
-        except Exception as e:
-            pass
-
+        
         self.state.state.segmentation_in_progress = True
         progress_container = st.empty()
         status_container = st.empty()
@@ -114,14 +103,20 @@ class AppHandlers:
 
             info_line_height = self.state.state.infoLineHeight or 0
 
+            image_array = np.asarray(
+                self.state.state.uploadedImage,
+                dtype=np.uint8
+            )
+
+            image_bytes = image_array.tobytes()
             postprocessed_masks, raw_masks, probs = segmentationImage(
-                uploaded_file=self.state.state.uploadedImage,
+                image_bytes=image_bytes,
                 INFLINEPX=info_line_height,
                 width=self.state.state.imgWidth,
                 height=self.state.state.imgHeight,
                 imgName=self.state.state.imageName,
                 model_config=model_config,
-                threshold=0.5
+                threshold=0.1
             )
         
             # Сохраняем оба варианта

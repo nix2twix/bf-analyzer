@@ -151,23 +151,85 @@ with blockWorkspace:
                 overlays=state_manager.state.overlays,
                 styles=state_manager.state.overlayStyles,
             )
-                    
 
+              
+    # Новости
+    with st.expander("🆕 What's new?", expanded=False):
+        language = st.segmented_control(
+            "Language",
+            ["RU", "EN"],
+            default="RU",
+            label_visibility="collapsed",
+            key="news_interface_language"
+        ) 
+        if language == "RU":
+            st.markdown("""
+                ### **Работа с оверлеем** 
+                --- 
+                🔍 **Масштабирование**
+
+                    Наведите курсор на рабочую область, ограниченную серой рамкой, и используйте колесо мыши.
+
+                ↩️ **Сброс масштаба**
+                 
+                    Выполните двойной клик левой кнопкой мыши по изображению.
+
+                🖱️ **Информация об объекте** 
+                
+                    Наведите курсор на распознанный объект: он подсветится, а рядом появится подсказка с его параметрами.
+            """)
+        else:
+            st.markdown("""
+                ### **Using the overlay**
+                ---
+                
+                🔍 **Zoom** 
+                
+                    Place the cursor inside the workspace outlined by the gray border and use the mouse wheel.
+
+                ↩️ **Reset zoom**
+                    
+                    Double-click the left mouse button on the image.
+
+                🖱️ **Object information** 
+                    
+                    Hover over a detected object: it will be highlighted and a tooltip with its parameters will appear.
+            """)
+        st.markdown("")
     # Помощь
     with st.expander("❓ Help", expanded=False):
-        st.markdown("<p>1. You can check user manual <a href='https://disk.yandex.ru/d/SHoSu6qIvqi62w'>here</a>.</p>", 
-                    unsafe_allow_html=True)
-        st.markdown("<p>2. An examples of SEM-images is available <a href='https://disk.yandex.ru/d/sp1UwEoEBgbyCw'>here</a>.</p>", 
-                    unsafe_allow_html=True)
-        st.markdown("<p>3. If you have any problems, you can try to clear cash:</p>", 
-                    unsafe_allow_html=True)
-        
-        if st.button("♻ Clear cache"):
-            st.cache_data.clear()
-            ui.clear_image_cache()
-            st.rerun()
+        language = st.segmented_control(
+            "Language",
+            ["RU", "EN"],
+            default="RU",
+            label_visibility="collapsed",
+            key="help_interface_language"
+        ) 
+        if language == "RU":
+            st.markdown("""
+                📖 **Руководство** — подробная инструкция по работе с Biofilm Analyzer доступна [здесь](https://disk.yandex.ru/i/67FqW7pGcJ6ELg).
 
-        st.markdown("<p>Contact e-mail: pawlova12@yandex.ru</p>", 
-                    unsafe_allow_html=True)
+                🖼️ **Примеры изображений** — примеры SEM-снимков доступны [здесь](https://disk.yandex.ru/d/sp1UwEoEBgbyCw).
+
+                ♻️ **Очистка кэша** — если сайт работает некорректно, попробуйте очистить кэш с помощью кнопки ниже.
+
+                ✉️ **Обратная связь** — pawlova12@yandex.ru
+            """)
+        else: 
+            st.markdown("""
+                📖 **User manual** — a detailed user guide is available [here](https://disk.yandex.ru/i/67FqW7pGcJ6ELg).
+
+                🖼️ **Image examples** — examples of SEM images are available [here](https://disk.yandex.ru/d/sp1UwEoEBgbyCw).
+
+                ♻️ **Clear cache** — if the website is not working correctly, try clearing the cache using the button below.
+
+                ✉️ **Contact** — pawlova12@yandex.ru
+            """)
+        st.markdown("")
+    if st.button("♻ Clear cache"):
+        st.cache_data.clear()
+        st.cache_resource.clear()
+        ui.clear_image_cache()
+        st.rerun()
 
 loadFooter()

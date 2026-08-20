@@ -35,8 +35,6 @@ class UIComponents:
                     break
         
             if has_objects:
-                # The state manager clears this cache whenever masks change.
-                # Do not hash every mask pixel on each Streamlit rerun.
                 cache_key = f"segmented_{self.state.state.isShowIntermediate}"
             
                 if cache_key not in st.session_state.image_cache:
@@ -52,16 +50,10 @@ class UIComponents:
                     st.session_state.image_cache[cache_key] = display_image
                 else:
                     display_image = st.session_state.image_cache[cache_key]
-            
-                # Адаптивное отображение
-                #st.image(display_image, width='stretch')
+    
                 return display_image
             else:
                 st.warning("⚠️ No objects found after filtering")
-                # st.image(
-                #     self.state.state.uploadedImage,
-                #     width='stretch'
-                # )
                 return Image.open(self.state.state.uploadedImage)
         else:
             cache_key = f"orig_{self.state.state.imageName}"
@@ -73,11 +65,7 @@ class UIComponents:
                 st.session_state.image_cache[cache_key] = display_image
             else:
                 display_image = st.session_state.image_cache[cache_key]
-            
-            # st.image(
-            #     display_image,
-            #     width='stretch'
-            # )
+
             return display_image
     
     def render_workflow_area_mini(self) -> Optional[Any]:
@@ -117,7 +105,7 @@ class UIComponents:
             label="Upload SEM image",
             label_visibility="collapsed",
             #help="⬇️ Upload SEM-image",
-            type=["bmp", "png", "jpg", "jpeg"],
+            type=["bmp", "png", "jpg", "jpeg", "tif", "tiff"],
             key="uploader"
         )
     
