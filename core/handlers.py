@@ -6,12 +6,13 @@ import numpy as np
 from core.stateManager import StateManager
 from segmentation.inference import segmentationImage
 from segmentation.objects import (
-    prepareObjectInfo
+    prepare_objectInfo
 )
+from segmentation.statistics import calculateStatistics
 from utils.drawing import checkSize, correctSize
 from utils.autoscale import estimateScale
-from utils.importer import loadMasksFromZip
-from utils.exporter import makeCVATbackup, saveResultsAsZip
+from utils.importer import loadMasksFromZip, checkAnnotationSize
+from utils.exporter import prepare_CVATbackup, saveResultsAsZip
 
 
 class AppHandlers:
@@ -19,16 +20,16 @@ class AppHandlers:
     def __init__(self, state_manager: StateManager):
         self.state = state_manager
     
-    def handle_file_upload(self, uploaded_file):
+    def handle_fileUpload(self, uploaded_file):
         """Обработка загрузки файла"""
         if uploaded_file is None:
             self.state.reset_all()
             return
         
         if uploaded_file.name != self.state.state.imageName:
-            self.state.set_image(uploaded_file)
+            self.state.setImage(uploaded_file)
             self._handle_image_padding()
-            self.handle_scale_detection()
+            self.handle_scaleDetection()
 
     def _handle_image_padding(self):
         """Обработка паддинга изображения"""
@@ -40,7 +41,7 @@ class AppHandlers:
             self.state.state.uploadedImage = paddedImg
             self.state.state.imgWidth, self.state.state.imgHeight = paddedImg.size
     
-    def handle_scale_detection(self, force=False):
+    def handle_scaleDetection(self, force=False):
         """Обработка определения масштаба"""
         if not force and self.state.state.get("manual_scale_set", False):
            return False
@@ -50,18 +51,30 @@ class AppHandlers:
             autoScale, scaleData = estimateScale(tempArrImg)
             
             if autoScale is not None:
-                self.state.update_scale(scaleData, autoScale)
+                self.state.updateScale(scaleData, autoScale)
                 self.state.state.manual_scale_set = False
                 
                 print(f"[DEBUG] Auto scale detected: {autoScale}")
                 return True
             else:
-                self.state.update_scale(None, None)
+                self.state.updateScale(None, None)
                 return False
         
         return False
     
-    def handle_annotation_apply(self, uploaded_ann):
+    def handle_imgAreaScaled(self):
+        self.state.state.imgAreaScaled = (self.state.state.imgWidth * 
+                                    (self.state.state.imgHeight - self.state.state.infoLineHeight) *
+                                    (self.state.state.imgScale ** 2))
+
+    def handle_annotationUpload(self, uploaded_ann):
+        isMatch, _, _ = checkAnnotationSize(uploaded_ann, 
+                                                    self.state.state.imgWidth, 
+                                                    self.state.state.imgHeight,
+                                                    minimumDiff = 128)
+        return isMatch
+    
+    def handle_annotationApply(self, uploaded_ann):
         """Применение загруженной аннотации"""
         if uploaded_ann is None:
             return False
@@ -140,14 +153,14 @@ class AppHandlers:
 
         
             # Подготовка информации об объектах
-            self.state.state.objectsInfo, area_stats = prepareObjectInfo(
+            self.state.state.objectsInfo, area_stats = prepare_objectInfo(
                 self.state.state.predictedObjects, 
                 model_config
             )
         
             self.state.state.filteredObjects = None
-            self.state.update_area_stats(self.state.state.objectsInfo, area_stats)
-            self.state.apply_filtration()
+            self.state.updateAreaStats(self.state.state.objectsInfo, area_stats)
+            self.state.applyFiltration()
         
             status_container.success("✅ Segmentation completed!")
             st.toast(f"✅ Segmentation complete! Found {total_objects} objects", icon="🎉")
@@ -162,18 +175,25 @@ class AppHandlers:
             self.state.state.segmentation_in_progress = False
             st.error(f"❌ Segmentation failed: {str(e)}")
             st.rerun()
+
+    def handle_statisticsAppear(self):
+       """Обработка первичного расчета статистики"""
+       return calculateStatistics(
+                self.state.state.filteredObjectsInfo,
+                scale=self.state.state.imgScale
+            )
     
-    def handle_statistics_update(self):
+    def handle_statisticsUpdate(self):
         """Обработка обновления статистики"""
         if self.state.state.predictedObjects is not None:
             if self.state.state.objectsInfo is None:
-                objects_info, area_stats = prepareObjectInfo(
+                objects_info, area_stats = prepare_objectInfo(
                     self.state.state.predictedObjects, 
                     self.state.state.model_config 
                 )
-                self.state.update_area_stats(objects_info, area_stats)
+                self.state.updateAreaStats(objects_info, area_stats)
     
-        self.state.apply_filtration()
+        self.state.applyFiltration()
             
     def handle_filtration(self, filter_params=None):
         """Обработка фильтрации"""
@@ -181,18 +201,18 @@ class AppHandlers:
             if filter_params:
                 self.state.update_filtration_params(filter_params)
 
-            self.state.apply_filtration()
+            self.state.applyFiltration()
             
-    def prepare_export_data(self):
+    def prepare_exportData(self):
         """Подготовка данных для экспорта"""
         if self.state.state.filteredObjects is not None:
-            from segmentation.objects import prepareFilteredObjectInfo
+            from segmentation.objects import prepare_filteredObjectInfo
             from segmentation.statistics import calculateStatistics
             from utils.drawing import drawPicture
 
             filtered_info = self.state.state.filteredObjectsInfo
             if filtered_info is None:
-                filtered_info = prepareFilteredObjectInfo(self.state.state.filteredObjects)
+                filtered_info = prepare_filteredObjectInfo(self.state.state.filteredObjects)
                 self.state.state.filteredObjectsInfo = filtered_info
             result_info = calculateStatistics(filtered_info, scale=self.state.state.imgScale)
             processed_image = drawPicture(
@@ -201,7 +221,7 @@ class AppHandlers:
                 self.state.state.classColors,
                 self.state.state.isShowIntermediate,
             )
-            self.state.state.polygonsCVAT = makeCVATbackup(
+            self.state.state.polygonsCVAT = prepare_CVATbackup(
                 self.state.state.uploadedImage,
                 self.state.state.imageName,
                 self.state.state.filteredObjects,

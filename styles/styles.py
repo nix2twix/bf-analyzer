@@ -1,5 +1,11 @@
 import streamlit as st
 
+def loadHeader():
+    st.markdown("")
+    st.header("🧪 Biofilm Analyzer", anchor=False)
+    st.markdown("This tool is designed for processing SEM images of biofilms")
+    st.markdown('<hr style="margin: 0rem 0;">', unsafe_allow_html=True)
+
 def loadStyles():
     st.markdown("""
         <style>

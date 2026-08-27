@@ -7,7 +7,6 @@ from models.configs import ModelConfig
 
 class ModelUIFactory:
     """Фабрика для создания UI-элементов специфичных для модели"""
-    
     @staticmethod
     def _on_slider_change(param_name: str, state: Dict, scale: float):
         

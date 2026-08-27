@@ -20,7 +20,7 @@ from openpyxl.styles import (
 from openpyxl.utils import get_column_letter
 from utils.rle import rle_encode
 
-def makeCVATbackup(
+def prepare_CVATbackup(
     image: Image.Image,
     original_filename: str,
     filtered_objects: dict,

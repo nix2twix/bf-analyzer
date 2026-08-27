@@ -4,6 +4,7 @@ from PIL import Image
 from datetime import datetime
 from typing import Dict, Any, Optional
 from core.factoryUI import ModelUIFactory
+from streamlit_image_overlay import streamlit_image_overlay as overlay 
 
 class UIComponents:
     """
@@ -95,12 +96,12 @@ class UIComponents:
         else:
             return self.state.state.uploadedImage
     
-    def clear_image_cache(self):
+    def clear_imageCache(self):
         """Очистка кэша изображений"""
         st.session_state.image_cache = {}
     
-    def render_file_uploader_only(self):
-        """Отрисовывает только загрузчик файла"""
+    def render_fileUploader(self):
+        """Отрисовывает загрузчик файла"""
         return st.file_uploader(
             label="Upload SEM image",
             label_visibility="collapsed",
@@ -109,8 +110,8 @@ class UIComponents:
             key="uploader"
         )
     
-    def render_model_selector_only(self) -> str:
-        """Отрисовывает только селектор модели"""
+    def render_modelSelector(self) -> str:
+        """Отрисовывает селектор модели"""
         model_options = {
             "Bacillus": "Bacillus",
             "Coccus": "Coccus"
@@ -132,7 +133,7 @@ class UIComponents:
         
         return "Bacillus"
     
-    def render_segmentation_button_only(self) -> bool:
+    def render_segmentationButton(self) -> bool:
         """Отрисовывает кнопку сегментации"""
         if self.state.state.get("segmentation_in_progress", False):
             st.info("⏳ Segmentation in progress...")
@@ -143,8 +144,26 @@ class UIComponents:
                 disabled=self.state.state.uploadedImage is None,
                 width='stretch'
             )
+
+    def render_overlayUI(self):
+        _overlays = self.state.uniteOverlayPaths(
+                        self.state.state.overlays, 
+                        self.state.state.scale_overlay
+                    )
+
+        _styles = self.state.uniteOverlayStyles([
+                    self.state.state.overlayStyles,
+                    self.state.state.scaleOverlayStyles
+                    ])
+
+        overlay(
+            self.state.state.uploadedImage,
+            overlays=_overlays,
+            styles=_styles,
+            key="main-image-viewer",
+        )
     
-    def render_annotation_uploader_only(self) -> Optional[Any]:
+    def render_annotationUploader(self) -> Optional[Any]:
         """Отрисовывает только загрузчик аннотаций"""
         return st.file_uploader(
             "⬇ Upload mask from CVAT (ZIP)",
@@ -154,10 +173,10 @@ class UIComponents:
             help="Upload annotations exported from CVAT to recalculate statistics"
         )
     
-    def render_filtration_ui(self, container, scale) -> Dict:
+    def render_filtrationUI(self, scale) -> Dict:
         """Отрисовывает UI фильтрации."""
 
-        config = self.state.get_config()
+        config = self.state.getConfig()
 
         if config and self.state.state.predictedObjects is not None:
             return self.factory.create_filtration_ui(
@@ -167,15 +186,13 @@ class UIComponents:
             )
 
         return {}
-    def render_statistics_content(self, container, result_info: Dict, img_area: float):
+    def render_statisticsContent(self, result_info: Dict, img_area: float):
         """Отрисовывает контент статистики"""
-        config = self.state.get_config()
-        
+        config = self.state.getConfig()
         if self.state.state.filteredObjects is not None and config and result_info:
-            with container:
-                self.factory.create_statistics_ui(config, result_info, img_area)
-  
-    def render_export_buttons(self, suffix: str = ""):
+            self.factory.create_statistics_ui(config, result_info, img_area)
+    
+    def render_exportButtons(self, suffix: str = ""):
         """Отрисовывает кнопки экспорта с уникальными ключами"""
         col1, col2 = st.columns(2)
         
@@ -214,7 +231,7 @@ class UIComponents:
                 help="Download segmentation results",
                 key=results_key
             )
-    def render_postprocess_toggle(self):
+    def render_postprocessToggle(self):
         current_value = self.state.state.get("apply_postsegmentation", False)
             
         postsegmentation_toggle = st.toggle(
@@ -326,3 +343,4 @@ class UIComponents:
                     st.rerun()
     
         dialog()
+

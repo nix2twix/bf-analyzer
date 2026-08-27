@@ -38,7 +38,7 @@ class StateManager:
         self.state.uploadedImage = None
         self.state.imgWidth = 0
         self.state.imgHeight = 0
-        self.state.imgArea = 0
+        self.state.imgAreaScaled = None
         self.state.scaleInfo = None
         self.state.imgScale = None
         self.state.scale_unit = "μm"
@@ -82,7 +82,7 @@ class StateManager:
         self.state.export_dirty = True
         
         # MODEL
-        self.state.model_config = self.get_config()
+        self.state.model_config = self.getConfig()
         self._init_dynamic_filtration_settings()
         
         # segmentation SETTINGS
@@ -106,7 +106,7 @@ class StateManager:
         """
         Первоначальная инициализация параметров фильтрации по конфигу
         """
-        config = self.get_config()
+        config = self.getConfig()
         if not config:
             return
         
@@ -135,13 +135,13 @@ class StateManager:
             
                 # Пересчитываем статистику для новых масок
                 if self.state.predictedObjects is not None and self.state.model_config:
-                    from segmentation.objects import prepareObjectInfo
-                    objects_info, area_stats = prepareObjectInfo(
+                    from segmentation.objects import prepare_objectInfo
+                    objects_info, area_stats = prepare_objectInfo(
                         self.state.predictedObjects, 
                         self.state.model_config
                     )
-                    self.update_area_stats(objects_info, area_stats, preserve_filters=True)
-                    self.apply_filtration()
+                    self.updateAreaStats(objects_info, area_stats, preserve_filters=True)
+                    self.applyFiltration()
                     self._clear_image_cache()
     
     def get_apply_postsegmentation(self) -> bool:
@@ -244,20 +244,20 @@ class StateManager:
             },
 
             "path": {
-                "default": {
-                    "stroke": "blue",
-                    "strokeWidth": 2,
-                },
-
-                "class": {
-                    className: {
+                className: {
+                    "style": {
                         "stroke": f"rgb({r}, {g}, {b})",
-                        "strokeWidth": 4,
+                        "strokeWidth": 3,
                         "fill": f"rgba({r}, {g}, {b}, {a / 255:.3f})",
+                    },
+                    "hover": {
+                        "stroke": f"rgb({r}, {g}, {b})",
+                        "strokeWidth": 1,
+                        "fill": f"rgba({r}, {g}, {b}, {1.5 * a / 255:.3f})",
                     }
-                    for className, (r, g, b, a)
-                    in config.class_colors.items()
-                },
+                }
+                for className, (r, g, b, a)
+                in config.class_colors.items()                
             },
 
             "tooltip": {
@@ -270,7 +270,7 @@ class StateManager:
             },
         }
 
-    def get_scale_overlay(self):
+    def render_scaleOverlay(self):
         """Создает overlay с распознанной масштабной шкалой."""
 
         scale_info = self.state.scaleInfo
@@ -315,23 +315,23 @@ class StateManager:
             )
         }]
     
-    def set_model(self, model_name: str) -> bool:
-        if model_name == self.state.get("modelType"):
+    def setModel(self, modelName: str) -> bool:
+        if modelName == self.state.get("modelType"):
             return False
 
-        self.state.modelType = model_name
-        self.state.model_config = self.get_config()
+        self.state.modelType = modelName
+        self.state.model_config = self.getConfig()
         
         # Обновляем цвета
-        self.state.classColors = self._get_model_colors(model_name)
-        self.state.overlayStyles = self._getModelOverlayStyle(model_name)
+        self.state.classColors = self._get_model_colors(modelName)
+        self.state.overlayStyles = self._getModelOverlayStyle(modelName)
 
         # Переинициализируем параметры фильтрации
         self._init_dynamic_filtration_settings()
         
         self.reset_results()
-        self.state.last_uploaded_file = None
-        self.state.last_uploaded_ann = None
+        self.state.lastUploadedFile = None
+        self.state.lastUploadedAnn = None
         self._clear_image_cache()
 
         return True
@@ -352,10 +352,10 @@ class StateManager:
         self.state.probs = None
         self._clear_image_cache()
     
-    def get_config(self) -> Optional[ModelConfig]:
+    def getConfig(self) -> Optional[ModelConfig]:
         return MODEL_CONFIGS.get(self.state.get("modelType"))
     
-    def set_image(self, uploaded_file):
+    def setImage(self, uploaded_file):
         self.state.imageName = uploaded_file.name
         self.state.uploadedImage = Image.open(uploaded_file).convert("L")
         self.state.imgWidth, self.state.imgHeight = self.state.uploadedImage.size
@@ -370,7 +370,7 @@ class StateManager:
         self.state.probs = None
         self.reset_results()
     
-    def update_scale(self, scale_data: tuple, auto_scale: float):
+    def updateScale(self, scale_data: tuple, auto_scale: float):
         if scale_data is not None:
             self.state.scaleInfo = scale_data
             self.state.imgScale = auto_scale
@@ -384,16 +384,16 @@ class StateManager:
                 self.state.infoLineHeight = 0
                 self.state.imgScale = 1
 
-    def update_area_stats(self, objects_info: Dict, area_stats: Dict, preserve_filters: bool = False):
+    def updateAreaStats(self, objects_info: Dict, area_stats: Dict, preserve_filters: bool = False):
         """Обновление статистики с динамическими диапазонами"""
         self.state.objectsInfo = objects_info
         self.state.filteredObjectsInfo = objects_info
-        self._update_slider_ranges_from_stats(area_stats, preserve_filters)
-        self._update_eccentricity_ranges(objects_info, preserve_filters)
+        self._updateSliderRanges(area_stats, preserve_filters)
+        self._updateEccentricityRanges(objects_info, preserve_filters)
     
-    def _update_slider_ranges_from_stats(self, area_stats: Dict, preserve_filters: bool = False):
+    def _updateSliderRanges(self, area_stats: Dict, preserve_filters: bool = False):
         """Динамическое обновление диапазонов на основе статистики"""
-        config = self.get_config()
+        config = self.getConfig()
         if not config:
             return
 
@@ -426,9 +426,9 @@ class StateManager:
                         'max': max_val
                     }
                     
-    def _update_eccentricity_ranges(self, objects_info: Dict, preserve_filters: bool = False):
+    def _updateEccentricityRanges(self, objects_info: Dict, preserve_filters: bool = False):
         """Обновление диапазонов для эксцентриситета на основе объектов"""
-        config = self.get_config()
+        config = self.getConfig()
         if not config:
             return
     
@@ -468,10 +468,10 @@ class StateManager:
                     }
                 
    
-    def apply_filtration(self):
+    def applyFiltration(self):
         """Применение фильтрации к predictedObjects"""
         if self.state.predictedObjects is not None and self.state.objectsInfo is not None:
-            config = self.get_config()
+            config = self.getConfig()
 
             if not self.state.filtration_params:
                 self._init_dynamic_filtration_settings()
@@ -499,11 +499,13 @@ class StateManager:
                     self.state.objectsInfo,
                     self.state.imgScale
             )
-            
+    @staticmethod
+    def uniteOverlayPaths(pathOverlays, scaleOverlays):
+        return pathOverlays + scaleOverlays
+    
     @staticmethod
     def uniteOverlayStyles(styles: list) -> dict:
         """Объединяет стили объектов и дополнительных overlay."""
-
         unitedStyles = {}
 
         for style in styles:

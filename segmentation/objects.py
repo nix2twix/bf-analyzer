@@ -67,7 +67,7 @@ def getOverlaysFromMask(predictedObjects, objectsInfo, scale):
     return overlays
 
 @st.cache_data(show_spinner=False, ttl=6000, max_entries=10)    
-def prepareObjectInfo(predictedLabels, model_config):
+def prepare_objectInfo(predictedLabels, model_config):
     """
     Подготовка информации об объектах для фильтрации и статистики
     """
@@ -101,7 +101,7 @@ def prepareObjectInfo(predictedLabels, model_config):
     return objectsInfo, areaStats
 
 @st.cache_data(show_spinner=False, ttl=6000, max_entries=10) 
-def prepareFilteredObjectInfo(filteredObjects):
+def prepare_filteredObjectInfo(filteredObjects):
     """
     Подготовка информации об отфильтрованных объектах для финальной статистики
     """

@@ -1,175 +1,136 @@
-# === LIBRARIES GENERAL ===
+# === GENERAL LIBS 
 import streamlit as st
-from streamlit_image_overlay import streamlit_image_overlay as overlay 
 
-# === PROJECT SCRIPTS ===
-from segmentation.objects import prepareFilteredObjectInfo
-from segmentation.statistics import calculateStatistics
-
-from utils.exporter import makeCVATbackup
-
-from styles.styles import loadStyles, loadFooter
+# === PROJECT LIBS 
+from segmentation.objects import prepare_filteredObjectInfo
+from utils.importer import checkAnnotationSize
+from styles.styles import (
+    loadStyles, 
+    loadFooter,
+    loadHeader
+)
        
 from core.stateManager import StateManager
 from core.handlers import AppHandlers
 from core.componentsUI import UIComponents
+from core.messages import Message, Error
 
-
+# === PAGE 
 st.set_page_config(page_title="Biofilm Analyzer", layout="wide", page_icon="🧪")
 loadStyles()
+loadHeader()
 
-state_manager = StateManager()
-handlers = AppHandlers(state_manager)
-ui = UIComponents(state_manager)
+stManager = StateManager()
+handlers = AppHandlers(stManager)
+ui = UIComponents(stManager)
+contentCol_workspace, gap, contentCol_tools = st.columns([2.5, 0.01, 1.5])
 
-# === HEADER ===
-st.markdown("")
-st.header("🧪 Biofilm Analyzer", anchor=False)
-st.markdown("This tool is designed for processing SEM images of biofilms")
-st.markdown('<hr style="margin: 0rem 0;">', unsafe_allow_html=True)
-
-# === INTERFACE ===
-blockWorkspace, gap, blockTools = st.columns([2.5, 0.01, 1.5])
-
-with blockTools:
-    tabsTools = st.tabs(["🔬 Segmentation", "📊 Statistics & Tools"])
+# === PAGE CONTENT ===
+with contentCol_tools:
+    contentTab_tools = st.tabs(["🔬 Segmentation", "📊 Statistics & Tools"])
     
     # Вкладка 1: Segmentation
-    with tabsTools[0]:
+    with contentTab_tools[0]:
         # 1. Загрузчик изображения
-        uploaded_file = ui.render_file_uploader_only()
+        _uploadedFile = ui.render_fileUploader()
         
         # 2. Выбор модели
-        model_selected = ui.render_model_selector_only()
-        if model_selected:
-            if state_manager.set_model(model_selected):
-                ui.clear_image_cache()
+        _modelSelected = ui.render_modelSelector()
+        if _modelSelected:
+            if stManager.setModel(_modelSelected):
+                ui.clear_imageCache()
     
         # Обработка загрузки файла
-        if uploaded_file and uploaded_file != state_manager.state.get("last_uploaded_file"):
-            handlers.handle_file_upload(uploaded_file)
-            state_manager.state.last_uploaded_file = uploaded_file
-            ui.clear_image_cache()
+        if _uploadedFile and (_uploadedFile != stManager.state.get("lastUploadedFile")):
+            handlers.handle_fileUpload(_uploadedFile)
+            stManager.state.lastUploadedFile = _uploadedFile
+            ui.clear_imageCache()
         
         # 3. Запуск сегментации
-        seg_clicked = ui.render_segmentation_button_only()
+        seg_clicked = ui.render_segmentationButton()
         if seg_clicked:
             handlers.handle_segmentation()
-            state_manager.state.last_uploaded_ann = None
-            state_manager.state.uploadedAnnName = None
-            # Очищаем кэш после сегментации
-            ui.clear_image_cache()
+            stManager.state.last_uploaded_ann = None
+            stManager.state.uploadedAnnName = None
+            ui.clear_imageCache()
         
         # Определение масштаба
-        if state_manager.state.uploadedImage is not None and state_manager.state.scaleInfo is None:
-            handlers.handle_scale_detection()
-        
+        if stManager.state.uploadedImage is not None and stManager.state.scaleInfo is None:
+            handlers.handle_scaleDetection()
+
+        if stManager.state.imgScale is not None:
+            handlers.handle_imgAreaScaled()
+
         # Обновление статистики
-        if (state_manager.state.predictedObjects is not None and 
-            state_manager.state.objectsInfo is None):
-            handlers.handle_statistics_update()
-        
+        if (stManager.state.predictedObjects is not None and 
+            stManager.state.objectsInfo is None):
+            handlers.handle_statisticsUpdate()
+            
         # 4. Кнопки экспорта
         st.markdown("📤 Export results")
         
-        if ui.render_export_buttons(suffix="seg") == "prepare":
-            handlers.prepare_export_data()
+        if ui.render_exportButtons(suffix = "seg") == "prepare":
+            handlers.prepare_exportData()
             st.rerun()
 
     # === Вкладка 2: Statistics & Import ===
-    with tabsTools[1]:
-        filtrationCol, gap, statCol = st.columns([1.5, 0.01, 1.6])
-        with filtrationCol:
+    with contentTab_tools[1]:
+        contentCol_filtration, gap, contentCol_statistics = st.columns([1.5, 0.01, 1.6])
+        with contentCol_filtration:
             st.markdown("⚙️ Filters")
 
-        with statCol:
+        with contentCol_statistics:
             st.markdown("📊 Statistics")
 
-        if state_manager.state.filteredObjects is None:
+        if stManager.state.filteredObjects is None:
             st.markdown("")
-            st.info("No results for statistics calculation.")
+            Message.noStatistisResults()
         else:
-            with filtrationCol:
-                filter_params = ui.render_filtration_ui(
-                    filtrationCol,
-                    state_manager.state.imgScale
-                )
-
-                if filter_params:
-                    handlers.handle_filtration(filter_params)
+            with contentCol_filtration:
+                _filterParams = ui.render_filtrationUI(stManager.state.imgScale)
+                if _filterParams:
+                    handlers.handle_filtration(_filterParams)
             
-            with statCol:
-                if state_manager.state.filteredObjectsInfo is None:
-                    state_manager.state.filteredObjectsInfo = prepareFilteredObjectInfo(
-                        state_manager.state.filteredObjects
+            with contentCol_statistics:
+                if stManager.state.filteredObjectsInfo is None:
+                    stManager.state.filteredObjectsInfo = prepare_filteredObjectInfo(
+                        stManager.state.filteredObjects
                 )
-                resultInfo = calculateStatistics(
-                    state_manager.state.filteredObjectsInfo,
-                    scale=state_manager.state.imgScale
-                )
-                
-                state_manager.state.imgArea = (state_manager.state.imgWidth * 
-                          (state_manager.state.imgHeight - state_manager.state.infoLineHeight) *
-                          (state_manager.state.imgScale ** 2))
-                
-                ui.render_statistics_content(statCol, resultInfo, state_manager.state.imgArea)
+                _resultInfo = handlers.handle_statisticsAppear()                
+               
+                ui.render_statisticsContent(_resultInfo, stManager.state.imgAreaScaled)
                 st.markdown("📊 Tools")
                 st.markdown("")
-                ui.render_postprocess_toggle()
+                ui.render_postprocessToggle()
                 #ui.render_scale_bar()
-        # Загрузчик аннотаций
+
         st.markdown("📂 Import annotations")
-        
-        if state_manager.state.uploadedImage is not None:
-            uploadedAnn = ui.render_annotation_uploader_only()
-            if uploadedAnn and uploadedAnn != state_manager.state.get("last_uploaded_ann"):
-                state_manager.state.polygonsCVAT = makeCVATbackup(
-                    state_manager.state.uploadedImage,
-                    state_manager.state.imageName,
-                    {},
-                    state_manager.state.imgWidth,
-                    state_manager.state.imgHeight,
-                    state_manager.state.model_config
-                )
-                if handlers.handle_annotation_apply(uploadedAnn):
-                    state_manager.state.last_uploaded_ann = uploadedAnn
-                    handlers.handle_statistics_update()
-                    ui.clear_image_cache()
+        if stManager.state.uploadedImage is not None:
+            _uploadedAnn = ui.render_annotationUploader()
+            if _uploadedAnn and _uploadedAnn != stManager.state.get("lastUploadedAnn"):
+                if handlers.handle_annotationUpload(_uploadedAnn):
+                    handlers.handle_annotationApply(_uploadedAnn)
+                    stManager.state.lastUploadedAnn = _uploadedAnn
+                    handlers.handle_statisticsUpdate()
+                    ui.clear_imageCache()
                     st.rerun()
+                else:
+                    Error.cantMatchAnnotation()
         else:
             st.markdown("")
-            st.info("Upload an image first to import annotations.")
+            Message.needUploadImageToAnnotate()
         
-        # Кнопки экспорта во вкладке Statistics
         st.markdown("📤 Export results")
-
-        if ui.render_export_buttons(suffix="stats") == "prepare":
-            handlers.prepare_export_data()
+        if ui.render_exportButtons(suffix="stats") == "prepare":
+            handlers.prepare_exportData()
             st.rerun()
 
-# === Левая панель: Workflow ===
-with blockWorkspace:
-    # Отрисовка рабочей области
-    if state_manager.state.uploadedImage:
-        state_manager.state.scale_overlay = state_manager.get_scale_overlay()
+# === Левая панель: Workspace ===
+with contentCol_workspace:
+    if stManager.state.uploadedImage:
+        stManager.state.scale_overlay = stManager.render_scaleOverlay()
+        ui.render_overlayUI()
 
-        overlays = (
-            state_manager.state.overlays
-            + state_manager.state.scale_overlay
-        )
-
-        styles = state_manager.uniteOverlayStyles([
-            state_manager.state.overlayStyles,
-            state_manager.state.scaleOverlayStyles
-        ])
-
-        overlay(
-            state_manager.state.uploadedImage,
-            overlays=overlays,
-            styles=styles,
-            key="main-image-viewer",
-        )
- 
     # Новости
     with st.expander("🆕 What's new?", expanded=False):
         language = st.segmented_control(
@@ -179,39 +140,7 @@ with blockWorkspace:
             label_visibility="collapsed",
             key="news_interface_language"
         ) 
-        if language == "RU":
-            st.markdown("""
-                ### **Работа с оверлеем** 
-                --- 
-                🔍 **Масштабирование**
-
-                    Наведите курсор на рабочую область, ограниченную серой рамкой, и используйте колесо мыши.
-
-                ↩️ **Сброс масштаба**
-                 
-                    Выполните двойной клик левой кнопкой мыши по изображению.
-
-                🖱️ **Информация об объекте** 
-                
-                    Наведите курсор на распознанный объект: он подсветится, а рядом появится подсказка с его параметрами.
-            """)
-        else:
-            st.markdown("""
-                ### **Using the overlay**
-                ---
-                
-                🔍 **Zoom** 
-                
-                    Place the cursor inside the workspace outlined by the gray border and use the mouse wheel.
-
-                ↩️ **Reset zoom**
-                    
-                    Double-click the left mouse button on the image.
-
-                🖱️ **Object information** 
-                    
-                    Hover over a detected object: it will be highlighted and a tooltip with its parameters will appear.
-            """)
+        Message.whatsNew(language)
         st.markdown("")
     # Помощь
     with st.expander("❓ Help", expanded=False):
@@ -222,31 +151,12 @@ with blockWorkspace:
             label_visibility="collapsed",
             key="help_interface_language"
         ) 
-        if language == "RU":
-            st.markdown("""
-                📖 **Руководство** — подробная инструкция по работе с Biofilm Analyzer доступна [здесь](https://disk.yandex.ru/i/67FqW7pGcJ6ELg).
-
-                🖼️ **Примеры изображений** — примеры SEM-снимков доступны [здесь](https://disk.yandex.ru/d/sp1UwEoEBgbyCw).
-
-                ♻️ **Очистка кэша** — если сайт работает некорректно, попробуйте очистить кэш с помощью кнопки ниже.
-
-                ✉️ **Обратная связь** — pawlova12@yandex.ru
-            """)
-        else: 
-            st.markdown("""
-                📖 **User manual** — a detailed user guide is available [here](https://disk.yandex.ru/i/67FqW7pGcJ6ELg).
-
-                🖼️ **Image examples** — examples of SEM images are available [here](https://disk.yandex.ru/d/sp1UwEoEBgbyCw).
-
-                ♻️ **Clear cache** — if the website is not working correctly, try clearing the cache using the button below.
-
-                ✉️ **Contact** — pawlova12@yandex.ru
-            """)
+        Message.help(language)
         st.markdown("")
         if st.button("♻ Clear cache"):
             st.cache_data.clear()
             st.cache_resource.clear()
-            ui.clear_image_cache()
+            ui.clear_imageCache()
             st.rerun()
 
 loadFooter()
