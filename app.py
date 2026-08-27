@@ -68,10 +68,9 @@ with contentCol_tools:
             
         # 4. Кнопки экспорта
         st.markdown("📤 Export results")
-        
-        if ui.render_exportButtons(suffix = "seg") == "prepare":
-            handlers.prepare_exportData()
-            st.rerun()
+    if ui.render_exportButtons(suffix = "seg") == "prepare":
+        handlers.prepare_exportData()
+        st.rerun()
 
     # === Вкладка 2: Statistics & Import ===
     with contentTab_tools[1]:
@@ -121,10 +120,6 @@ with contentCol_tools:
             Message.needUploadImageToAnnotate()
         
         st.markdown("📤 Export results")
-        if ui.render_exportButtons(suffix="stats") == "prepare":
-            handlers.prepare_exportData()
-            st.rerun()
-
 # === Левая панель: Workspace ===
 with contentCol_workspace:
     if stManager.state.uploadedImage:
