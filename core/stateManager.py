@@ -205,31 +205,33 @@ class StateManager:
     def _getScaleOverlayStyle(self) -> dict:
         return {
             "viewport": {
-                            "outline": "none",
-                            "border": "1px solid #555",
-                            "borderRadius": "10px",
-                        },
+                    "outline": "none",
+                    "border": "1px solid #555",
+                    "borderRadius": "10px",
+                },
             "path": {
                 "default": {
-                    "stroke": "#ffffff",
-                    "strokeWidth": 3,
-                },
-                "class": {
-                    "scale": {
-                        "stroke": "#ff0000",
-                        "strokeWidth": 8,
+                    "style": {
+                        "stroke": "#ffffff",
+                        "strokeWidth": 3,
                     }
-                }
-            },
+                },
+                "scale": {
+                    "style": {    
+                        "stroke": "#7e1e18",
+                        "strokeWidth": 8,
+                        }
+                    }
+                },
             "tooltip": {
-                            "backgroundColor": "black",
-                            "color": "white",
-                            "borderRadius": "10px",
-                            "padding": "13px",
-                            "fontSize": "13px",
-                            "whiteSpace": "pre-line",
-            },
-        }
+                    "backgroundColor": "black",
+                    "color": "white",
+                    "borderRadius": "10px",
+                    "padding": "13px",
+                    "fontSize": "13px",
+                    "whiteSpace": "pre-line",
+                },
+            }
    
     def _getModelOverlayStyle(self, model_name: str) -> dict:
         config = MODEL_CONFIGS.get(model_name)
@@ -280,7 +282,6 @@ class StateManager:
         if scale_info is None or scale is None:
             return []
 
-        # Для отрисовки нужны координаты шкалы и её длина.
         if len(scale_info) < 4:
             return []
 
@@ -508,28 +509,17 @@ class StateManager:
     
     @staticmethod
     def uniteOverlayStyles(styles: list) -> dict:
-        """Объединяет стили объектов и дополнительных overlay."""
         unitedStyles = {}
-
         for style in styles:
             if not style:
                 continue
-
-            # Копируем верхнеуровневые стили
             for key, value in style.items():
-                if key not in unitedStyles:
+                if key == "path":
+                    unitedStyles.setdefault("path", {})
+                    for className, classStyle in value.items():
+                        if className not in unitedStyles["path"]:
+                            unitedStyles["path"][className] = {}
+                        unitedStyles["path"][className].update(classStyle)
+                elif key not in unitedStyles:
                     unitedStyles[key] = value.copy() if isinstance(value, dict) else value
-
-            # Объединяем классы path, а не заменяем их
-            if "path" in style and "class" in style["path"]:
-                if "path" not in unitedStyles:
-                    unitedStyles["path"] = {}
-
-                if "class" not in unitedStyles["path"]:
-                    unitedStyles["path"]["class"] = {}
-
-                unitedStyles["path"]["class"].update(
-                    style["path"]["class"]
-                )
-
         return unitedStyles
