@@ -3,7 +3,7 @@ import streamlit as st
 
 # === PROJECT LIBS 
 from segmentation.objects import prepare_filteredObjectInfo
-from utils.importer import checkAnnotationSize
+from utils.examples import get_example_by_name
 from styles.styles import (
     loadStyles, 
     loadFooter,
@@ -31,9 +31,17 @@ with contentCol_tools:
     
     # Вкладка 1: Segmentation
     with contentTab_tools[0]:
-        # 1. Загрузчик изображения
+        # 1. Загрузчик изображения или обработка выбранного примера
         _uploadedFile = ui.render_fileUploader()
-        
+        _exampleName = st.session_state.get("selected_example_name")
+        if _exampleName and st.session_state.get("uploader") is None:
+            _example = get_example_by_name(_exampleName)
+            if _example is not None:
+                _uploadedFile = _example
+
+        if st.session_state.get("uploader") is not None:
+            st.session_state.selected_example_name = None
+
         # 2. Выбор модели
         _modelSelected = ui.render_modelSelector()
         if _modelSelected:
@@ -41,10 +49,10 @@ with contentCol_tools:
                 ui.clear_imageCache()
     
         # Обработка загрузки файла
-        if _uploadedFile and (_uploadedFile != stManager.state.get("lastUploadedFile")):
+        _current_name = getattr(_uploadedFile, "name", None) if _uploadedFile else None
+        if _uploadedFile and _current_name != stManager.state.get("lastUploadedFileName"):
             handlers.handle_fileUpload(_uploadedFile)
-            stManager.state.lastUploadedFile = _uploadedFile
-            ui.clear_imageCache()
+            stManager.state.lastUploadedFileName = _current_name
         
         # 3. Запуск сегментации
         seg_clicked = ui.render_segmentationButton()
@@ -153,5 +161,8 @@ with contentCol_workspace:
             st.cache_resource.clear()
             ui.clear_imageCache()
             st.rerun()
+    # Примеры
+    with st.expander("🖼️ Examples", expanded=True):
+        ui.renderExamples()
 
 loadFooter()

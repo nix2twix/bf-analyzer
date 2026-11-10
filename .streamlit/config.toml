@@ -4,6 +4,11 @@
 	port = 8502
 	baseUrlPath = "biofilms"
 
+[browser]
+	serverAddress = "ctss.tulsu.ru"
+	serverPort = 8080
+	gatherUsageStats = false
+
 [theme]
 	base = "dark"
 	primaryColor = "#24b353"

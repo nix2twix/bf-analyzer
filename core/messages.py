@@ -5,6 +5,13 @@ class Message:
     def whatsNew(language="RU"):
         if language == "RU":
             st.markdown("""
+                ### **Примеры изображений**
+                | Действие | Описание    |
+                |----------|-------------|
+                | ▶️ **Cегментация** | Нажмите кнопку **Use it** под картинкой-примером, и изображение загрузится в рабочую область как обычный файл |
+                | ✅ **Текущий пример** | Кнопка **Using** показывает, какой пример выбран сейчас |
+                | ⚠️ **Свой файл** | Если загружен собственный снимок через загрузчик, кнопки примеров недоступны — сначала очистите загрузчик (для этого нажмите :material/close: на загрузчике)|
+
                 ### **Работа с оверлеем** 
                 | Действие | Описание |
                 |----------|----------|
@@ -15,15 +22,22 @@ class Message:
             """)
         elif language == "EN":
             st.markdown("""
+                ### ** Example images**
+                | Action | Description |
+                |--------|-------------|
+                | ▶️ **Run processing** | Click **Use it** under an example image — it will be loaded into the workspace just like a regular upload |
+                | ✅ **Current example** | The **Using** button indicates which example is currently selected |
+                | ⚠️ **Own file** | If a custom image is uploaded via the uploader, the example buttons are disabled — clear the uploader first (click on :material/close: in uploader)|
+
                 ### **Using the overlay**
                 | Action | Description |
                 |--------|-------------|
                 | 🔍 **Zoom** | Place the cursor inside the workspace (within the gray border) and use the mouse wheel |
                 | ↩️ **Reset zoom** | Double-click the left mouse button on the image |
                 | 🖱️ **Object information** | Hover over a detected object: it will be highlighted and a tooltip with its parameters will appear |
-                | 👁️ **Show/Hide masks** | Right-click on the image to toggle the visibility of all object masks |
+                | 👁️ **Show or hide masks** | Right-click on the image to toggle the visibility of all object masks |
             """)
-
+            
     def help(language="RU"):
         if language == "RU":
             st.markdown("""

@@ -4,6 +4,7 @@ from PIL import Image
 from datetime import datetime
 from typing import Dict, Any, Optional
 from core.factoryUI import ModelUIFactory
+from utils.examples import load_examples, get_example_by_name
 from streamlit_image_overlay import streamlit_image_overlay as overlay 
 
 class UIComponents:
@@ -343,4 +344,54 @@ class UIComponents:
                     st.rerun()
     
         dialog()
+
+    def renderExamples(self):
+        examples = load_examples()
+        if not examples:
+            st.info("Examples are not available.")
+        else:
+            st.markdown(
+                """
+                <style>
+                div[data-testid="stImage"] img {
+                    object-fit: cover;
+                    border-radius: 8px;
+                }
+                .example-caption {
+                    font-size: 0.78rem;
+                    line-height: 1.15;
+                    color: #9aa0a6;
+                    min-height: 2.3em;
+                    margin: 0.35rem 0 0.25rem 0;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            current_name = st.session_state.get("selected_example_name")
+            uploader_active = st.session_state.get("uploader") is not None
+            cols = st.columns(len(examples), gap="small")
+            for i, (col, ex) in enumerate(zip(cols, examples)):
+                with col:
+                    st.image(ex.getvalue(), use_container_width=True)
+                    st.markdown(
+                        f'<div class="example-caption">{ex.description}</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    is_current = (current_name == ex.name)
+                    label = "Using" if is_current else "Use it"
+                    btype = "primary" if is_current else "secondary"
+
+                    if st.button(
+                        label,
+                        type=btype,
+                        key=f"use_example_{ex.name}",
+                        use_container_width=True,
+                        disabled=uploader_active,
+                    ):
+                        st.session_state.selected_example_name = ex.name
+                        st.session_state.pop("lastUploadedFile", None)
+                        st.rerun()
 

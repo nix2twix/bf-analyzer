@@ -36,6 +36,7 @@ class StateManager:
         # IMAGE
         self.state.imageName = None
         self.state.uploadedImage = None
+        self.state.lastUploadedFileName = None
         self.state.imgWidth = 0
         self.state.imgHeight = 0
         self.state.imgAreaScaled = None
@@ -331,6 +332,7 @@ class StateManager:
         
         self.reset_results()
         self.state.lastUploadedFile = None
+        self.state.lastUploadedFileName = None
         self.state.lastUploadedAnn = None
         self._clear_image_cache()
 
@@ -356,6 +358,7 @@ class StateManager:
         return MODEL_CONFIGS.get(self.state.get("modelType"))
     
     def setImage(self, uploaded_file):
+        uploaded_file.seek(0)
         self.state.imageName = uploaded_file.name
         self.state.uploadedImage = Image.open(uploaded_file).convert("L")
         self.state.imgWidth, self.state.imgHeight = self.state.uploadedImage.size
