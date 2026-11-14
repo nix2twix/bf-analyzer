@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import streamlit as st
-
+from typing import Callable, Optional
 from torch.utils.data import DataLoader
 from PIL import Image
 from .preprocessing import cropLineBelow, makePatches
@@ -108,33 +108,34 @@ def get_model(model_config):
 
     return model, device
 
-@st.cache_data(show_spinner=False, max_entries=10) 
-def segmentationImage(
+def _run_segmentation(
     image_bytes: bytes,
     INFLINEPX: int,
     width: int,
     height: int,
     imgName: str,
     model_config: dict,
-    threshold=0
+    threshold: float = 0,
+    show_progress: bool = True,    
+    patch_progress_cb: Optional[Callable[[int, int], None]] = None,
 ):
     """
     Универсальная функция сегментации для любой модели.
     Возвращает оба варианта: с постобработкой и без.
-    
+
     Returns:
         postprocessed_masks: словарь нумерованных масок с постобработкой
         raw_masks: словарь нумерованных масок без постобработки
         probs: словарь карт вероятностей для каждого класса
     """
     import time
-    
+
     origImg = Image.frombytes(
         "L",
         (width, height),
         image_bytes
     )
-    
+
     # Обрезка информационной строки снизу
     croppedImg = cropLineBelow(origImg, INFLINEPX)
     croppedW, croppedH = croppedImg.size
@@ -155,34 +156,43 @@ def segmentationImage(
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
     # Инициализация карт вероятностей
-    probs = {name: np.zeros((croppedH, croppedW), dtype=np.float32) 
+    probs = {name: np.zeros((croppedH, croppedW), dtype=np.float32)
              for name in model_config.class_names}
     count = np.zeros((croppedH, croppedW), dtype=np.float32)
 
-    # Прогресс-бар
+    # Прогресс-бар (только если запрошен)
     total_patches = len(test_loader)
-    progress_container = st.container()
-    with progress_container:
-        progress_bar = st.progress(0, text="Preparing for inference...")
-        time_text = st.empty()
-    
+    if show_progress and patch_progress_cb is None:
+        progress_container = st.container()
+        with progress_container:
+            progress_bar = st.progress(0, text="Preparing for inference...")
+            time_text = st.empty()
+    else:
+        progress_container = None
+        progress_bar = None
+        time_text = None
+
     start_time = time.time()
-    
+
     with torch.no_grad():
         for idx, (images, patch_info) in enumerate(test_loader):
-            progress = (idx + 1) / total_patches
-            elapsed = time.time() - start_time
-            
-            if idx > 0:
-                avg_time_per_patch = elapsed / (idx + 1)
+            if patch_progress_cb is not None:
+                patch_progress_cb(idx + 1, total_patches)
+            elif show_progress:
+                progress = (idx + 1) / total_patches
+                elapsed = time.time() - start_time
+                progress_bar.progress(
+                    progress,
+                    text=f"Processing patch {idx + 1}/{total_patches}"
+                )
+                if idx > 0:
+                    avg_time_per_patch = elapsed / (idx + 1)
+                    time_text.caption(
+                        f"⏱️ Elapsed: {elapsed:.1f}s | Speed: {avg_time_per_patch:.1f}s/patch"
+                    )
+                else:
+                    time_text.caption("⏱️ Starting inference...")
 
-            progress_bar.progress(progress, text=f"Processing patch {idx + 1}/{total_patches}")
-            
-            if idx > 0:
-                time_text.caption(f"⏱️ Elapsed: {elapsed:.1f}s | Speed: {avg_time_per_patch:.1f}s/patch")
-            else:
-                time_text.caption("⏱️ Starting inference...")
-            
             images = images.to(device)
             outputs = torch.softmax(model(images), dim=1).cpu()
 
@@ -192,20 +202,21 @@ def segmentationImage(
 
                 for classIdx, name in enumerate(model_config.class_names):
                     prob = outputs[img_idx, classIdx].numpy()
-                    h_out, w_out = prob.shape  
-                    probs[name][y:y+h_out, x:x+w_out] += prob 
+                    h_out, w_out = prob.shape
+                    probs[name][y:y+h_out, x:x+w_out] += prob
 
                 count[y:y+h_out, x:x+w_out] += 1
-    
-    progress_container.empty()
-    
+
+    if show_progress and progress_container is not None:
+        progress_container.empty()
+
     # Нормализация вероятностей
     count += 1e-9
     for name in probs:
         probs[name] /= count
- 
+
     # Получение маски предсказания
-    stackedProbs = np.stack([probs[name] for name in model_config.class_names], axis=-1)   
+    stackedProbs = np.stack([probs[name] for name in model_config.class_names], axis=-1)
     maxProbs = np.max(stackedProbs, axis=-1)
     predMask = np.argmax(stackedProbs, axis=-1)
     predMask[maxProbs < threshold] = 0
@@ -214,11 +225,11 @@ def segmentationImage(
     binary_masks = {}
     for i, name in enumerate(model_config.class_names):
         binary_masks[name] = (predMask == i).astype(np.uint8)
-    
+
     # Получаем оба варианта: с постобработкой и без
     raw_masks = simple_labeling(binary_masks)
     postprocessed_masks = apply_postsegmentation_to_masks(binary_masks, probs, model_config, threshold)
-    
+
     # Формирование итоговых нумерованных масок для каждого класса
     def expand_to_full_size(masks_dict):
         """Расширяет маски до исходного размера"""
@@ -233,9 +244,48 @@ def segmentationImage(
                 full_masks[name] = np.zeros((height, width), dtype=np.uint32)
                 break
         return full_masks
-    
+
     raw_masks_full = expand_to_full_size(raw_masks)
     postprocessed_masks_full = expand_to_full_size(postprocessed_masks)
-    
+
     print(f"[INFO] segmentation {imgName} DONE!")
     return postprocessed_masks_full, raw_masks_full, probs
+
+_segmentationImage_cached = st.cache_data(show_spinner=False, max_entries=10)(_run_segmentation)
+
+def segmentationImage(
+    image_bytes: bytes,
+    INFLINEPX: int,
+    width: int,
+    height: int,
+    imgName: str,
+    model_config: dict,
+    threshold: float = 0,
+    show_progress: bool = True,
+    use_cache: bool = True,
+    patch_progress_cb: Optional[Callable[[int, int], None]] = None
+):
+    """
+    Сегментация изображения.
+
+    Args:
+        image_bytes, INFLINEPX, width, height, imgName, model_config, threshold:
+            как раньше.
+        show_progress: рисовать ли внутренний st.progress. Для batch — False.
+        use_cache: использовать ли st.cache_data. По умолчанию True.
+            В batch рекомендуется False — чтобы не забивать кэш
+            «батчевыми» результатами и не гонять лишний хэш больших массивов.
+
+    Кэш-ключ включает все аргументы, в т.ч. show_progress и use_cache —
+    поэтому batch-вызовы (show_progress=False, use_cache=False) живут
+    в отдельной «нише» и не вытесняют одиночные (show_progress=True).
+    """
+    if use_cache and patch_progress_cb is None:
+        return _segmentationImage_cached(
+            image_bytes, INFLINEPX, width, height, imgName, model_config,
+            threshold, show_progress, use_cache,
+        )
+    return _run_segmentation(
+        image_bytes, INFLINEPX, width, height, imgName, model_config,
+        threshold, show_progress, patch_progress_cb,
+    )

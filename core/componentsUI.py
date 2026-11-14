@@ -104,10 +104,9 @@ class UIComponents:
     def render_fileUploader(self):
         """Отрисовывает загрузчик файла"""
         return st.file_uploader(
-            label="Upload SEM image",
+            label="Upload SEM image or ZIP archive",
             label_visibility="collapsed",
-            #help="⬇️ Upload SEM-image",
-            type=["bmp", "png", "jpg", "jpeg", "tif", "tiff"],
+            type=["bmp", "png", "jpg", "jpeg", "tif", "tiff", "zip"],
             key="uploader"
         )
     
@@ -176,7 +175,9 @@ class UIComponents:
     
     def render_filtrationUI(self, scale) -> Dict:
         """Отрисовывает UI фильтрации."""
-
+        if self.state.state.get("batch_mode", False):
+            st.info("⚙️ Filters are disabled for batch processing.")
+            return {}
         config = self.state.getConfig()
 
         if config and self.state.state.predictedObjects is not None:
@@ -194,29 +195,46 @@ class UIComponents:
             self.factory.create_statistics_ui(config, result_info, img_area)
     
     def render_exportButtons(self, suffix: str = ""):
-        """Отрисовывает кнопки экспорта с уникальными ключами"""
         col1, col2 = st.columns(2)
-        
+
         cvat_key = f"cvat_export_{suffix}" if suffix else "cvat_export_main"
         results_key = f"results_export_{suffix}" if suffix else "results_export_main"
-        
+
+        is_batch = self.state.state.get("batch_mode", False)
+
+        if is_batch:
+            n_ok = sum(
+                1 for it in (self.state.state.get("batch_items") or []) if it.ok
+            )
+            cvat_file_name = f"backup-{n_ok}-{datetime.now().strftime('%d-%m-%Y-%H-%M')}.zip"
+        else:
+            cvat_file_name = f"backup-1-{datetime.now().strftime('%d-%m-%Y-%H-%M')}.zip"
+
         if self.state.state.export_dirty:
+            if is_batch:
+                has_data = bool(self.state.state.get("batch_items"))
+            else:
+                has_data = self.state.state.filteredObjects is not None
+
             if st.button(
-                    "⬇️ Save changes",
-                    key=f"prepare_results_{suffix}",
-                    width="stretch",
-                    disabled=self.state.state.filteredObjects is None,
-                ):
-                    return "prepare"
+                "⬇️ Save changes",
+                key=f"prepare_results_{suffix}",
+                width="stretch",
+                disabled=not has_data,
+            ):
+                return "prepare"
             return None
 
         with col1:
             st.download_button(
                 label="📥 CVAT backup",
                 data=self.state.state.polygonsCVAT or b"",
-                file_name=f"backup-{datetime.now().strftime('%d-%m-%Y-%H-%M')}.zip",
+                file_name=cvat_file_name,
                 mime="application/zip",
-                disabled=self.state.state.uploadedImage is None or self.state.state.polygonsCVAT is None,
+                disabled=(
+                    (not is_batch and self.state.state.uploadedImage is None)
+                    or self.state.state.polygonsCVAT is None
+                ),
                 width='stretch',
                 help="Download masks in CVAT format",
                 key=cvat_key
@@ -224,14 +242,18 @@ class UIComponents:
         with col2:
             st.download_button(
                 label="💾 Results",
-                    data=self.state.state.zipBuffer or b"",
+                data=self.state.state.zipBuffer or b"",
                 file_name=f"results-{datetime.now().strftime('%Y-%m-%d-%H-%M')}.zip",
                 mime="application/zip",
-                disabled=self.state.state.uploadedImage is None or self.state.state.zipBuffer is None,
+                disabled=(
+                    (not is_batch and self.state.state.uploadedImage is None)
+                    or self.state.state.zipBuffer is None
+                ),
                 width='stretch',
                 help="Download segmentation results",
                 key=results_key
             )
+
     def render_postprocessToggle(self):
         current_value = self.state.state.get("apply_postsegmentation", False)
             
@@ -344,6 +366,34 @@ class UIComponents:
                     st.rerun()
     
         dialog()
+
+    def render_batchSegmentationButton(self) -> bool:
+        if self.state.state.get("batch_in_progress", False):
+            st.info("⏳ Batch processing in progress...")
+            return False
+        return st.button(
+            "🚀 Start batch segmentation",
+            disabled=not self.state.state.get("batch_images_raw"),
+            width="stretch",
+            key="batch_start_btn",
+        )
+
+    def render_batchSummary(self):
+        items = self.state.state.get("batch_items", []) or []
+        if not items:
+            return
+        ok = sorted((it for it in items if it.ok), key=lambda it: it.unique_name.lower())
+        err = sorted((it for it in items if not it.ok), key=lambda it: it.unique_name.lower())
+
+        st.markdown(
+            f"**Batch results:** {len(ok)} processed, {len(err)} with errors."
+        )
+        with st.expander("Show details", expanded=False):
+            for it in ok:
+                counts = {k: v["count"] for k, v in (it.stats or {}).items() if v.get("count")}
+                st.write(f"✅ **{it.unique_name}** — {counts or 'no objects'}")
+            for it in err:
+                st.write(f"❌ **{it.unique_name}** — {it.error}")
 
     def renderExamples(self):
         examples = load_examples()

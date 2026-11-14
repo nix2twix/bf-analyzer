@@ -54,6 +54,15 @@ class StateManager:
         # SCALE
         self.state.manual_scale_set = False
 
+        # BATCH 
+        self.state.batch_mode = False
+        self.state.batch_items = []         
+        self.state.batch_zip_cvat = None
+        self.state.batch_zip_excel = None 
+        self.state.batch_errors = [] 
+        self.state.batch_in_progress = False
+        self.state.batch_images_raw = []
+
         # PREDS
         self.state.probThreshold = 0.5
         self.state.predictedObjects = None
@@ -323,7 +332,8 @@ class StateManager:
 
         self.state.modelType = modelName
         self.state.model_config = self.getConfig()
-        
+        if self.state.get("batch_mode", False):
+            self.clearBatch()
         # Обновляем цвета
         self.state.classColors = self._get_model_colors(modelName)
         self.state.overlayStyles = self._getModelOverlayStyle(modelName)
@@ -354,11 +364,29 @@ class StateManager:
         self.state.raw_masks = None
         self.state.probs = None
         self._clear_image_cache()
+
+    def setBatchMode(self, enabled: bool):
+        self.state.batch_mode = bool(enabled)
+        self.reset_results()
+        self.state.batch_items = []
+        self.state.batch_zip_cvat = None
+        self.state.batch_zip_excel = None
+        self.state.batch_errors = []
+        self._clear_image_cache()
+
+    def clearBatch(self):
+        self.state.batch_items = []
+        self.state.batch_zip_cvat = None
+        self.state.batch_zip_excel = None
+        self.state.batch_errors = []
     
     def getConfig(self) -> Optional[ModelConfig]:
         return MODEL_CONFIGS.get(self.state.get("modelType"))
     
     def setImage(self, uploaded_file):
+        if self.state.get("batch_mode", False):
+            self.setBatchMode(False)
+
         uploaded_file.seek(0)
         self.state.imageName = uploaded_file.name
         self.state.uploadedImage = Image.open(uploaded_file).convert("L")
@@ -368,7 +396,7 @@ class StateManager:
         self.state.imgScale = None
         self.state.scaleText = None
         self.state.infoLineHeight = None
-        self.state.manual_scale_set = False 
+        self.state.manual_scale_set = False
         self.state.postprocessed_masks = None
         self.state.raw_masks = None
         self.state.probs = None

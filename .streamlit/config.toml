@@ -4,10 +4,6 @@
 	port = 8502
 	baseUrlPath = "biofilms"
 
-[browser]
-	serverAddress = "ctss.tulsu.ru"
-	serverPort = 80
-	gatherUsageStats = false
 
 [theme]
 	base = "dark"
