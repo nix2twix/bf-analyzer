@@ -368,11 +368,14 @@ class StateManager:
     def setBatchMode(self, enabled: bool):
         self.state.batch_mode = bool(enabled)
         self.reset_results()
-        self.state.batch_items = []
-        self.state.batch_zip_cvat = None
-        self.state.batch_zip_excel = None
-        self.state.batch_errors = []
-        self._clear_image_cache()
+        if enabled:
+            self.state.batch_mode = bool(enabled)
+            self.reset_results()
+            self.state.batch_items = []
+            self.state.batch_zip_cvat = None
+            self.state.batch_zip_excel = None
+            self.state.batch_errors = []
+            self._clear_image_cache()
 
     def clearBatch(self):
         self.state.batch_items = []

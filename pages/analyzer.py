@@ -58,7 +58,6 @@ with contentCol_tools:
             if ui.render_batchSegmentationButton():
                 handlers.handle_batchSegmentation()
 
-            ui.render_batchSummary()
         else:
             seg_clicked = ui.render_segmentationButton()
             if seg_clicked:
@@ -141,15 +140,61 @@ with contentCol_tools:
             st.markdown("📤 Export results")
 # === Левая панель: Workspace ===
 with contentCol_workspace:
-    if stManager.state.uploadedImage:
-        stManager.state.scale_overlay = stManager.render_scaleOverlay()
-        ui.render_overlayUI()
-        
+    if stManager.state.get("batch_mode", False):
+        # === BATCH: вместо overlay — сводка ===
+        _items = stManager.state.get("batch_items", []) or []
+
+        if not _items:
+            st.info(
+                "📦 Batch mode is active. Click "
+                "**Start batch segmentation** to see results here."
+            )
+        else:
+            _ok = [it for it in _items if it.error is None]
+            _err = [it for it in _items if it.error is not None]
+
+            st.markdown(
+                f"### 📊 Batch results: {len(_ok)} processed, {len(_err)} with errors"
+            )
+
+            # --- Обработанные ---
+            if _ok:
+                with st.expander("Show batch details", expanded=True):
+                    for it in _ok:
+                        counts = {
+                            k: v["count"]
+                            for k, v in (it.stats or {}).items()
+                            if v.get("count")
+                        }
+                        st.markdown(
+                            f"✅ **{it.unique_name}** — "
+                            f"`{counts or 'no objects'}`"
+                        )
+
+            # --- Ошибки ---
+            if _err:
+                st.error(f"⚠️ {len(_err)} file(s) failed")
+                with st.expander("Show errors", expanded=False):
+                    for it in _err:
+                        st.markdown(f"❌ **{it.unique_name}** — {it.error}")
+    else:
+        # === SINGLE: как было ===
+        if stManager.state.uploadedImage:
+            stManager.state.scale_overlay = stManager.render_scaleOverlay()
+            ui.render_overlayUI()
+
+    # === Экспендеры — общие для обоих режимов ===
     with st.expander("🖼️ Examples", expanded=True):
         ui.renderExamples()
+
     with st.expander("🚀 Quick start guide", expanded=False):
         GuideContent.quickStart("EN")
-        st.page_link("pages/docs.py", label = "📖 Click to open full documentation", width="stretch")
+        st.page_link(
+            "pages/docs.py",
+            label="📖 Click to open full documentation",
+            width="stretch",
+        )
+
     with st.expander("📚 Citation & Contacts", expanded=False):
         Message.citationAndContacts()
 
