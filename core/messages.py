@@ -5,38 +5,44 @@ class Message:
     def whatsNew(language="RU"):
         if language == "RU":
             st.markdown("""
+            ### **Пакетная обработка (ZIP)**
+                | Действие | Описание |
+                |----------|----------|
+                | 📦 **Загрузка архива** | Перетащите ZIP-архив с изображениями в загрузчик (поддерживаются BMP, PNG, JPG, TIFF). Сайт автоматически распознает архив и переключится в режим пакетной обработки |
+                | 🚀 **Запуск** | Нажмите **Start batch segmentation**. Прогресс отображается для всего пакета и для каждой картинки отдельно |
+                | 📊 **Результаты** | После обработки появится сводка по каждому файлу. Кнопки экспорта позволяют скачать CVAT-бэкап и сводный Excel-отчёт |
+                | ⚠️ **Без фильтрации** | В пакетном режиме фильтрация **отключена**: экспортируются все объекты, найденные моделью. Это сделано намеренно, так как настраивать фильтры для десятков картинок вручную неудобно |
                 ### **Примеры изображений**
                 | Действие | Описание    |
                 |----------|-------------|
                 | ▶️ **Cегментация** | Нажмите кнопку **Use it** под картинкой-примером, и изображение загрузится в рабочую область как обычный файл |
                 | ✅ **Текущий пример** | Кнопка **Using** показывает, какой пример выбран сейчас |
                 | ⚠️ **Свой файл** | Если загружен собственный снимок через загрузчик, кнопки примеров недоступны — сначала очистите загрузчик (для этого нажмите :material/close: на загрузчике)|
-
-                ### **Работа с оверлеем** 
-                | Действие | Описание |
-                |----------|----------|
-                | 🔍 **Масштабирование** | Наведите курсор на рабочую область (внутри серой рамки) и используйте колесо мыши |
-                | ↩️ **Сброс масштаба** | Выполните двойной клик левой кнопкой мыши по изображению |
-                | 🖱️ **Информация об объекте** | Наведите курсор на распознанный объект: он подсветится, появится подсказка с параметрами |
-                | 👁️ **Отображение масок** | Щелкните правой кнопкой мыши по изображению для переключения видимости всех масок |
             """)
         elif language == "EN":
             st.markdown("""
+                | Action | Description |
+                |--------|-------------|
+                | 📦 **Upload archive** | Drag a ZIP archive with images into the uploader (BMP, PNG, JPG, TIFF supported). The app detects the archive and switches to batch mode automatically |
+                | 🚀 **Start** | Click **Start batch segmentation**. Progress is shown both for the whole batch and for each image |
+                | 📊 **Results** | A summary appears after processing. Export buttons let you download a CVAT backup and a combined Excel report |
+                | ⚠️ **No filtering** | Filtering is **disabled** in batch mode: all objects detected by the model are exported. This is intentional, since tuning filters for dozens of images manually is impractical |
                 ### ** Example images**
                 | Action | Description |
                 |--------|-------------|
                 | ▶️ **Run processing** | Click **Use it** under an example image — it will be loaded into the workspace just like a regular upload |
                 | ✅ **Current example** | The **Using** button indicates which example is currently selected |
                 | ⚠️ **Own file** | If a custom image is uploaded via the uploader, the example buttons are disabled — clear the uploader first (click on :material/close: in uploader)|
-
-                ### **Using the overlay**
-                | Action | Description |
-                |--------|-------------|
-                | 🔍 **Zoom** | Place the cursor inside the workspace (within the gray border) and use the mouse wheel |
-                | ↩️ **Reset zoom** | Double-click the left mouse button on the image |
-                | 🖱️ **Object information** | Hover over a detected object: it will be highlighted and a tooltip with its parameters will appear |
-                | 👁️ **Show or hide masks** | Right-click on the image to toggle the visibility of all object masks |
             """)
+    @staticmethod
+    def citationAndContacts():
+        st.markdown("""
+    **Contact:** pawlova12@yandex.ru
+
+    **Citation:**
+
+    > Segmentation of Microscopic Images of Pseudomonas Biofilms Using Deep Learning and Semantic Filtering / V. S. Pavlova, M. Yu. Kurbakov, A. V. Kopylov, O. S. Seredin // Pattern Recognition and Image Analysis. Advances in Mathematical Theory and Applications. – 2026. – Vol. 36, No. 2. – P. 777-792. – DOI [10.1134/S1054661826700586](https://doi.org/10.1134/S1054661826700586).
+    """)
             
     def help(language="RU"):
         if language == "RU":

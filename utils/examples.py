@@ -9,7 +9,7 @@ EXAMPLE_FILES = [
     ("example1.bmp", "An example of a developing biofilm of bacillus (Pseudomonas Veronii)."),
     ("example2.bmp", "An example of a coccus biofilm forming (Staphylococcus Hominis)."),
     ("example3.bmp", "An example of a mature coccus biofilm (Staphylococcus Hominis)."),
-    ("example4.bmp", "An example of accumulation of bacillus biofilms (Pseudomonas Veronii)."),
+    ("example4.bmp", "An example of accumulation of bacillus (Pseudomonas Veronii)."),
 ]
 
 

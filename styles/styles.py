@@ -264,7 +264,7 @@ def loadFooter():
         }
     </style>
     <div class="footer">
-        <p><a href="https://tulsu.ru/molodezhnye-nauchnye-laboratorii/laboratoriya-kognitivnyh-tehnologij-i-simulyacionnyh-sistem" 
+        <p><a href="https://ctss.tulsu.ru/" 
               target="_blank" 
               style='display: block; text-align: center; color: #24b353; text-decoration: none;'>
             &copy; 2026 BioChemTech, TulSU
