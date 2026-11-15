@@ -18,6 +18,8 @@ with _container:
 
     if st.button("⬅ Back to segmentation", key="docs_back_top", type="primary"):
         st.switch_page("pages/analyzer.py")
+
+        
 tab_quick, tab_batch, tab_overlay, tab_examples, tab_faq = st.tabs([
     "🚀 Quick start",
     "📦 Batch",
@@ -36,19 +38,16 @@ with tab_examples:
     GuideContent.examples(language)
 with tab_faq:
     GuideContent.faq(language)
-    st.markdown("")
-    col1, col2 = st.columns([1, 3])
+    col1, col2 = st.columns([1, 3], vertical_alignment="center")
     with col1:
         if st.button("♻ Clear cache", width="stretch"):
             st.cache_data.clear()
             st.cache_resource.clear()
             if "image_cache" in st.session_state:
                 st.session_state.image_cache = {}
-            st.rerun()
-    with col2:
-        if st.button("⬅ Back to analyzer", width="stretch"):
-            st.switch_page("pages/analyzer.py")
-
+            #st.rerun()
+            with col2:
+                st.info("Cash was cleared.", width="stretch")
 st.markdown("---")
 st.subheader("📚 Citation & contacts")
 Message.citationAndContacts()

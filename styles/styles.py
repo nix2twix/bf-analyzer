@@ -9,7 +9,6 @@ def loadHeader():
 def loadStyles():
     st.markdown("""
         <style>
-
             hr {
                 margin: 0.5rem 0 !important;
             }
@@ -30,7 +29,8 @@ def loadStyles():
                 padding-top: 0 !important;
                 padding-bottom: 0 !important;
             }
-            
+    
+       
             [data-testid="column"] {
                 padding: 0 0.5rem !important;
             }

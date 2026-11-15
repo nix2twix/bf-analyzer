@@ -11,7 +11,6 @@ from core.componentsUI import UIComponents
 from core.messages import Message, Error
 from core.guideContent import GuideContent
 # === PAGE 
-st.set_page_config(page_title="Biofilm Analyzer", layout="wide", page_icon="🧪")
 stManager = StateManager()
 handlers = AppHandlers(stManager)
 ui = UIComponents(stManager)
@@ -148,10 +147,9 @@ with contentCol_workspace:
         
     with st.expander("🖼️ Examples", expanded=True):
         ui.renderExamples()
-
-    if st.button("📖 Open documentation", width="stretch", key="open_docs_btn", type="primary"):
-        st.switch_page("pages/docs.py")
-
-    with st.expander("📚 Citation & Contacts", expanded=True):
+    with st.expander("🚀 Quick start guide", expanded=False):
+        GuideContent.quickStart("EN")
+        st.page_link("pages/docs.py", label = "📖 Click to open full documentation", width="stretch")
+    with st.expander("📚 Citation & Contacts", expanded=False):
         Message.citationAndContacts()
 

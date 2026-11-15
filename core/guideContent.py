@@ -3,39 +3,73 @@ import streamlit as st
 
 class GuideContent:
     """Содержимое вкладок страницы Guide. Разделено по языкам и разделам."""
-
     # ---------- Quick start ----------
     @staticmethod
-    def quickStart(language="RU"):
+    def quickStart(language="EN"):
         if language == "RU":
             st.markdown("""
             ### Быстрый старт
+            <table style="width: 100%;">
+            <tr>
+                <th style="width: 28%;">Шаг</th>
+                <th>Действие</th>
+            </tr>
+            <tr>
+                <td>1️⃣ <b>Загрузите снимок</b></td>
+                <td>Загрузите SEM-изображение в загрузчик справа, или выберите пример из доступных выше.</td>
+            </tr>
+            <tr>
+                <td>2️⃣ <b>Выберите модель</b></td>
+                <td>Модель Bacillus подходит для палочковидных микроорганизмов, модель Coccus — для шаровидных.</td>
+            </tr>
+            <tr>
+                <td>3️⃣ <b>Запустите сегментацию</b></td>
+                <td>Нажмите <b>🧪 Start segmentation</b> для запуска обработки. Дождитесь завершения — на изображении появятся маски объектов.</td>
+            </tr>
+            <tr>
+                <td>4️⃣ <b>Настройте фильтры</b></td>
+                <td>Фильтрация по площади и форме доступна на вкладке <b>Statistics & Tools</b>.
+                Статистика площадей вычисляется и обновляется автоматически.</td>
+            </tr>
+            <tr>
+                <td>5️⃣ <b>Скачайте результаты</b></td>
+                <td>Нажмите <b>⬇️ Save changes</b> для подтверждения изменений и выберите <b>📥 CVAT backup</b>, чтобы скачать
+                бэкап-архив, читаемый CVAT или <b>💾 Results</b>, чтобы получить статистики в Excel и маски.</td>
+            </tr>
+            </table>
+            """, unsafe_allow_html=True)
 
-            | Шаг | Действие |
-            |-----|----------|
-            | 1️⃣ **Загрузите снимок** | Перетащите SEM-изображение (BMP, PNG, JPG, TIFF) в загрузчик справа или выберите пример ниже |
-            | 2️⃣ **Выберите модель** | Bacillus — для палочковидных, Coccus — для шаровидных микроорганизмов |
-            | 3️⃣ **Запустите сегментацию** | Нажмите **🧪 Start segmentation**. Дождитесь завершения — на изображении появятся маски объектов |
-            | 4️⃣ **Настройте фильтры** | Вкладка **Statistics & Tools** содержит настройки фильтрации по площади и форме организмов. Статистика обновляется автоматически |
-            | 5️⃣ **Экспортируйте** | Нажмите **⬇️ Save changes** и выберите **📥 CVAT backup** (маски в CVAT) или **💾 Results** (ZIP с Excel и PNG) |
-
-            💡 Масштаб определяется автоматически по масштабной линейке на снимке. Если не удалось определить масштаб, значения площадей рассчитываются в пикселях.
-            """)
-            st.space()
         else:
             st.markdown("""
-            ### Quick start
-
-            | Step | Action |
-            |------|--------|
-            | 1️⃣ **Upload an image** | Drop a SEM image (BMP, PNG, JPG, TIFF) into the uploader on the right, or pick an example below |
-            | 2️⃣ **Choose a model** | Bacillus — for rod-shaped, Coccus — for spherical microorganisms |
-            | 3️⃣ **Run segmentation** | Click **🧪 Start segmentation**. Once done, object masks will appear on the image |
-            | 4️⃣ **Tune filters** | Go to **Statistics & Tools**, where is area and eccentricity sliders. Statistics update automatically |
-            | 5️⃣ **Export** | Click **⬇️ Save changes**, then **📥 CVAT backup** (masks for CVAT) or **💾 Results** (ZIP with Excel and PNG) |
-
-            💡 Scale is auto-detected from the scale bar on the image. If detection fails, area values will appear in pixel. 
-            """)
+                ### Quick start
+                <table style="width: 100%;">
+                <tr>
+                    <th style="width: 25%;">Шаг</th>
+                    <th>Action</th>
+                </tr>
+                <tr>
+                    <td>1️⃣ <b>Upload an image</b></td>
+                    <td>Drop a SEM image into the uploader on the right, or pick an example below</td>
+                </tr>
+                <tr>
+                    <td>2️⃣ <b>Choose a model</b></td>
+                    <td>Bacillus — for rod-shaped, Coccus — for spherical microorganisms</td>
+                </tr>
+                <tr>
+                    <td>3️⃣ <b>Run segmentation</b></td>
+                    <td>Click <b>🧪 Start segmentation</b>. Once done, object masks will appear on the image</td>
+                </tr>
+                <tr>
+                    <td>4️⃣ <b>Tune filters</b></td>
+                    <td>Go to <b>Statistics & Tools</b>, where is area and eccentricity sliders. 
+                    Statistics will update automaticallyю</td>
+                </tr>
+                <tr>
+                    <td>5️⃣ <b>Export</b></td>
+                    <td>Click <b>⬇️ Save changes</b>, then <b>📥 CVAT backup</b> (masks for CVAT) or <b>💾 Results</b> (ZIP with Excel and PNG)</td>
+                </tr>
+                </table>
+                """, unsafe_allow_html=True)
 
     # ---------- Batch ----------
     @staticmethod

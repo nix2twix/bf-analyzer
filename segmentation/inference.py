@@ -265,25 +265,10 @@ def segmentationImage(
     use_cache: bool = True,
     patch_progress_cb: Optional[Callable[[int, int], None]] = None
 ):
-    """
-    Сегментация изображения.
-
-    Args:
-        image_bytes, INFLINEPX, width, height, imgName, model_config, threshold:
-            как раньше.
-        show_progress: рисовать ли внутренний st.progress. Для batch — False.
-        use_cache: использовать ли st.cache_data. По умолчанию True.
-            В batch рекомендуется False — чтобы не забивать кэш
-            «батчевыми» результатами и не гонять лишний хэш больших массивов.
-
-    Кэш-ключ включает все аргументы, в т.ч. show_progress и use_cache —
-    поэтому batch-вызовы (show_progress=False, use_cache=False) живут
-    в отдельной «нише» и не вытесняют одиночные (show_progress=True).
-    """
     if use_cache and patch_progress_cb is None:
         return _segmentationImage_cached(
             image_bytes, INFLINEPX, width, height, imgName, model_config,
-            threshold, show_progress, use_cache,
+            threshold, show_progress,
         )
     return _run_segmentation(
         image_bytes, INFLINEPX, width, height, imgName, model_config,
