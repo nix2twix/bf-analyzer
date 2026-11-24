@@ -253,136 +253,184 @@ def prepare_CVATbackup_batch(items, model_config, images_bytes_map=None):
 
 def saveBatchSummaryAsZip(items, model_config, filtration_params=None):
     """
-    Собирает ZIP со сводным Excel-отчётом по батчу.
+    Сводный Excel по батчу.
 
-    Args:
-        items: list[BatchItem] — все items (включая ошибочные).
-        model_config: ModelConfig.
-        filtration_params: dict — дефолтные параметры фильтрации
-            (для листа Filters). Может быть None.
+    Колонки:
+        #, Image, Width (px), Height (px), Scale (µm/px),
+        Total area (px²), Total area (µm²),
+        {Title} count, {Title} area (px²), {Title} area (µm²), {Title} % area
 
-    Returns:
-        BytesIO — ZIP с одним файлом summary-<дата>.xlsx.
+    Цвета:
+        Заголовки классов — фон в цвет класса, белый текст.
+        µm²-ячейки без масштаба — "—", красным, по центру.
     """
+    from openpyxl.styles import Alignment
+
     ok_items = [it for it in items if it.error is None]
     err_items = [it for it in items if it.error is not None]
-
     if not ok_items:
         raise ValueError("No successfully processed items to summarize.")
 
     ok_items = sorted(ok_items, key=lambda it: it.unique_name.lower())
     err_items = sorted(err_items, key=lambda it: it.unique_name.lower())
 
-    if filtration_params is None:
-        filtration_params = {
-            name: {"min": float(lo), "max": float(hi)}
-            for name, (lo, hi) in model_config.filtration_params.items()
-        }
-
-    # --- Список классов и их заголовков ---
-    # фильтруем служебные (bg/background)
     class_names = [
         c for c in model_config.class_names
         if "background" not in c and c != "bg"
     ]
-
     def _class_title(c):
         if hasattr(model_config, "class_titles") and c in model_config.class_titles:
             return model_config.class_titles[c][0]
         return c
 
-    # --- Основная таблица ---
+    # --- DataFrame ---
     rows = []
     for idx, it in enumerate(ok_items, start=1):
         total_px = it.width * it.height
+        has_scale = bool(getattr(it, "scale_ok", False)) and it.scale > 0
+
         row = {
             "#": idx,
             "Image": it.unique_name,
             "Width (px)": it.width,
             "Height (px)": it.height,
+            "Scale (µm/px)": round(it.scale, 4) if has_scale else "—",
             "Total area (px²)": total_px,
+            "Total area (µm²)": round(total_px * (it.scale ** 2), 2) if has_scale else "—",
         }
         for c in class_names:
             stats = (it.stats or {}).get(c, {})
             count = stats.get("count", 0)
             area_px = stats.get("total_area_px", 0)
+            area_um2 = round(area_px * (it.scale ** 2), 2) if has_scale else "—"
             percent = (area_px / total_px * 100.0) if total_px > 0 else 0.0
             title = _class_title(c)
             row[f"{title} count"] = count
+            row[f"{title} area (px²)"] = area_px
+            row[f"{title} area (µm²)"] = area_um2
             row[f"{title} % area"] = round(percent, 2)
         rows.append(row)
-
     summary_df = pd.DataFrame(rows)
 
-    # --- Лист Filters ---
-    filters_rows = []
-    for param_name, values in filtration_params.items():
-        if isinstance(values, dict):
-            lo = values.get("min", "")
-            hi = values.get("max", "")
-            display_value = f"{lo:.2f} - {hi:.2f}" if isinstance(lo, (int, float)) and isinstance(hi, (int, float)) else f"{lo} - {hi}"
-        else:
-            display_value = str(values)
-        filters_rows.append({
-            "Parameter": param_name.replace("_", " ").title(),
-            "Value": display_value,
-        })
-    filters_df = pd.DataFrame([
-        {"Parameter": "Filtration",
-        "Value": "Disabled in batch mode — all detected objects are exported"},
-    ])
+    filters_df = pd.DataFrame([{
+        "Parameter": "Filtration",
+        "Value": "Disabled in batch mode — all detected objects are exported (min area 200 px)",
+    }])
 
-    # --- Лист Errors ---
     errors_df = None
     if err_items:
         errors_df = pd.DataFrame(
             [{"Image": it.unique_name, "Error": it.error} for it in err_items]
         )
 
-    # --- Сборка Excel ---
+    # --- Excel ---
     excel_buffer = io.BytesIO()
     with pd.ExcelWriter(excel_buffer, engine="openpyxl") as writer:
         summary_df.to_excel(writer, sheet_name="Batch summary", index=False)
-        if filters_df is not None:
-            filters_df.to_excel(writer, sheet_name="Filters", index=False)
+        filters_df.to_excel(writer, sheet_name="Filters", index=False)
         if errors_df is not None:
             errors_df.to_excel(writer, sheet_name="Errors", index=False)
 
-    # --- Оформление (те же цвета/жирный, что в saveResultsAsZip) ---
     excel_buffer.seek(0)
     wb = load_workbook(excel_buffer)
+    ws = wb["Batch summary"]
 
-    for sheet_name in wb.sheetnames:
-        ws = wb[sheet_name]
-        for column in ws.columns:
-            max_length = 0
-            column_letter = get_column_letter(column[0].column)
-            for cell in column:
-                try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except Exception:
-                    pass
-            adjusted_width = min(max_length + 2, 40)
-            ws.column_dimensions[column_letter].width = adjusted_width
+    # --- Заголовки ---
+    headers = [ws.cell(row=1, column=i + 1).value for i in range(ws.max_column)]
+    headers = [h for h in headers if h is not None]
+    col_idx = {h: i + 1 for i, h in enumerate(headers)}
 
-        for cell in ws[1]:
+    # Цвета классов
+    def _class_color(c):
+        if hasattr(model_config, "class_colors") and c in model_config.class_colors:
+            r, g, b, a = model_config.class_colors[c]
+            return f"{r:02X}{g:02X}{b:02X}"
+        return "366092"
+
+    # Строка 1: заголовки с переносом и цветом
+    for c in class_names:
+        color_hex = _class_color(c)
+        title = _class_title(c)
+        for sub in ["count", "area (px²)", "area (µm²)", "% area"]:
+            col_name = f"{title} {sub}"
+            if col_name not in col_idx:
+                continue
+            cell = ws.cell(row=1, column=col_idx[col_name])
+            # Перенос: biofilm / area (px²) — в одной ячейке на 2 строки
+            cell.value = f"{title}\n{sub}"
+            cell.alignment = Alignment(
+                horizontal="center", vertical="center", wrap_text=True
+            )
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill(
+                start_color=color_hex, end_color=color_hex, fill_type="solid"
+            )
+
+    # Остальные заголовки — стандартный вид
+    for h in headers:
+        if h in col_idx and not any(h.startswith(_class_title(c)) for c in class_names):
+            cell = ws.cell(row=1, column=col_idx[h])
             cell.font = Font(bold=True, color="FFFFFF")
             cell.alignment = Alignment(horizontal="center", vertical="center")
             cell.fill = PatternFill(
                 start_color="366092", end_color="366092", fill_type="solid"
             )
 
+    # --- Тело: "—" по центру, красным ---
+    RED = Font(color="C00000", bold=True)
+    CENTER = Alignment(horizontal="center", vertical="center")
+
+    for r, it in enumerate(ok_items, start=2):
+        has_scale = bool(getattr(it, "scale_ok", False)) and it.scale > 0
+        for h in headers:
+            col = col_idx[h]
+            cell = ws.cell(row=r, column=col)
+            if cell.value == "—":
+                cell.alignment = CENTER
+                cell.font = RED
+            elif "(µm²)" in h and not has_scale:
+                cell.value = "—"
+                cell.alignment = CENTER
+                cell.font = RED
+
+    # --- Ширины колонок ---
+    for sheet_name in wb.sheetnames:
+        ws2 = wb[sheet_name]
+        for column in ws2.columns:
+            max_length = 0
+            col_letter = get_column_letter(column[0].column)
+            for cell in column:
+                try:
+                    if cell.value is not None and len(str(cell.value)) > max_length:
+                        # Для заголовков с \n считаем длину по первой строке
+                        first_line = str(cell.value).split("\n")[0]
+                        max_length = max(max_length, len(first_line))
+                except Exception:
+                    pass
+            ws2.column_dimensions[col_letter].width = min(max_length + 1, 15)
+
+        if sheet_name == "Batch summary":
+            ws2.column_dimensions["A"].width = 5
+            ws2.row_dimensions[1].height = 32  # под перенос шапки
+
+        for cell in ws2[1]:
+            cell.alignment = Alignment(
+                horizontal="center", vertical="center", wrap_text=True
+            )
+
+    try:
+        wb.calculation.fullCalcOnLoad = True
+    except Exception:
+        pass
+
     formatted_buffer = io.BytesIO()
     wb.save(formatted_buffer)
     formatted_buffer.seek(0)
 
-    # --- ZIP ---
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         fname = f"summary-{datetime.now().strftime('%Y-%m-%d-%H-%M')}.xlsx"
         zf.writestr(fname, formatted_buffer.getvalue())
-
     zip_buffer.seek(0)
     return zip_buffer
 

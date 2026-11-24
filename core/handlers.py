@@ -8,7 +8,7 @@ from core.stateManager import StateManager
 from core.batchProcessor import BatchProcessor
 from segmentation.inference import segmentationImage
 from segmentation.objects import (
-    prepare_objectInfo
+    prepare_objectInfo, prepare_filteredObjectInfo
 )
 from segmentation.statistics import calculateStatistics
 from utils.drawing import checkSize, correctSize
@@ -46,19 +46,214 @@ class AppHandlers:
             self.handle_scaleDetection()
 
     def handle_batchUpload(self, uploaded_zip):
-        """
-        Шаг 2: только распаковка и валидация архива.
-        Обработка появится на Шаге 3 (BatchProcessor).
-        """
         self.state.setBatchMode(True)
+        self.state.state.batch_selected_names = None
 
         images = self._extract_images_from_zip(uploaded_zip)
         self.state.state.batch_images_raw = images
+        for name, _ in images:
+            self.state.state[f"batch_chk_{name}"] = True
+            self.state.state.batch_selected_map[name] = True
 
         if not images:
             st.error("❌ ZIP archive contains no supported images.")
             self.state.state.batch_mode = False
             return
+
+
+    def _detect_batch_scale(self, item):
+        """Автоматическое определение масштаба для BatchItem."""
+        from PIL import Image
+
+        try:
+            img = Image.open(io.BytesIO(item.original_bytes)).convert("L")
+            img_array = np.asarray(img, dtype=np.uint8)
+
+            auto_scale, _ = estimateScale(img_array)
+
+            if auto_scale is not None:
+                item.scale = float(auto_scale)
+                item.scale_ok = True
+                item.scale_source = "auto"
+                return True
+
+        except Exception as e:
+            print(f"[DEBUG] Scale detection failed for {item.unique_name}: {e}")
+
+        item.scale = 1.0
+        item.scale_ok = False
+        item.scale_source = "none"
+
+        return False
+
+
+    def handle_batchAnnotationUpload(self, uploaded_ann, mode: str = "replace"):
+        """
+        mode:
+            "replace" — полностью заменить batch_items содержимым бэкапа
+            "merge"   — обновить совпадающие + добавить новые
+            "update"  — обновить только совпадающие, новые игнорировать
+        """
+        from utils.importer import loadBatchFromBackup
+        from core.batchProcessor import BatchItem
+
+        model_config = self.state.state.model_config
+        if not model_config:
+            st.error("Model config is not set.")
+            return False
+
+        loaded = loadBatchFromBackup(uploaded_ann, model_config)
+        if not loaded:
+            st.error("Could not read backup archive.")
+            return False
+
+        # === Выбор режима (пока всегда replace, UI появится позже) ===
+        if mode == "replace":
+            self.state.state.batch_mode = True
+            self.state.state.batch_items = []
+            self.state.state.batch_images_raw = []
+            self.state.state.batch_selected_map = {}
+            current_items = {}
+        else:
+            if not self.state.state.get("batch_mode", False):
+                self.state.state.batch_mode = True
+            current_items = {
+                it.unique_name: it
+                for it in (self.state.state.batch_items or [])
+            }
+
+        updated = 0
+        added = 0
+
+        for name, data in loaded.items():
+            item = current_items.get(name)
+
+            if item is not None:
+                if data["width"] != item.width or data["height"] != item.height:
+                    st.warning(
+                        f"Size mismatch for {name}: "
+                        f"backup {data['width']}x{data['height']}, "
+                        f"batch {item.width}x{item.height}. Skipped."
+                    )
+                    continue
+                item.filtered_masks = data["masks"]
+                item.exported = False
+                obj_info, _ = prepare_objectInfo(data["masks"], model_config)
+                item.objects_info = obj_info
+                item.filtered_info = prepare_filteredObjectInfo(data["masks"])
+                item.stats = calculateStatistics(item.filtered_info, scale=item.scale)
+                item.img_area_um2 = item.width * item.height * (item.scale ** 2)
+                updated += 1
+
+            else:
+                if mode == "update":
+                    continue  # в update только совпадающие
+                new_item = BatchItem(
+                    unique_name=name,
+                    original_bytes=data["bytes"],
+                )
+
+                self._detect_batch_scale(new_item)
+
+                new_item.width = data["width"]
+                new_item.height = data["height"]
+                new_item.info_line_height = 0
+                new_item.filtered_masks = data["masks"]
+                new_item.exported = False
+                obj_info, _ = prepare_objectInfo(data["masks"], model_config)
+                new_item.objects_info = obj_info
+                new_item.filtered_info = prepare_filteredObjectInfo(data["masks"])
+                new_item.stats = calculateStatistics(
+                    new_item.filtered_info, scale=new_item.scale
+                )
+                new_item.img_area_um2 = (
+                    new_item.width * new_item.height * (new_item.scale ** 2)
+                )
+                current_items[name] = new_item
+                self.state.state[f"batch_chk_{name}"] = True
+                self.state.state.setdefault("batch_selected_map", {})[name] = True
+                added += 1
+
+        items = sorted(current_items.values(), key=lambda it: it.unique_name.lower())
+        self.state.state.batch_items = items
+        self.state.state.batch_images_raw = [
+            (it.unique_name, it.original_bytes) for it in items
+        ]
+
+        if updated == 0 and added == 0:
+            st.error("No images from backup could be applied.")
+            return False
+
+        msg = []
+        if updated:
+            msg.append(f"{updated} updated")
+        if added:
+            msg.append(f"{added} added")
+        st.success("✅ " + ", ".join(msg))
+        self.state.invalidate_export()
+        return True
+
+    def handle_batchUploadFromBackup(self, uploaded_zip):
+        """
+        Загружает CVAT-бэкап как batch без предварительной сегментации, только с готовой разметкой.
+        """
+        from utils.importer import loadBatchFromBackup
+        from core.batchProcessor import BatchItem
+
+        model_config = self.state.state.model_config
+        if not model_config:
+            st.error("Model config is not set.")
+            return False
+
+        loaded = loadBatchFromBackup(uploaded_zip, model_config)
+        if not loaded:
+            st.error("Could not read backup archive (missing images or annotations).")
+            return False
+
+        # Переключаемся в batch-режим и очищаем старое
+        self.state.setBatchMode(True)
+
+        items = []
+        for name, data in loaded.items():
+            item = BatchItem(
+                unique_name=name,
+                original_bytes=data["bytes"],
+            )
+            item.width = data["width"]
+            item.height = data["height"]
+            item.info_line_height = 0
+            self._detect_batch_scale(item)
+            item.filtered_masks = data["masks"]
+            item.exported = False
+
+            # Пересчёт статистик
+            obj_info, _ = prepare_objectInfo(data["masks"], model_config)
+            item.objects_info = obj_info
+            from segmentation.objects import prepare_filteredObjectInfo
+            item.filtered_info = prepare_filteredObjectInfo(data["masks"])
+            item.stats = calculateStatistics(
+                item.filtered_info, scale=item.scale
+            )
+            item.img_area_um2 = item.width * item.height * (item.scale ** 2)
+            items.append(item)
+
+        items.sort(key=lambda it: it.unique_name.lower())
+        self.state.state.batch_items = items
+        self.state.state.batch_images_raw = [
+            (it.unique_name, it.original_bytes) for it in items
+        ]
+
+        for it in items:
+            self.state.state[f"batch_chk_{it.unique_name}"] = True
+            self.state.state.batch_selected_map[it.unique_name] = True
+
+        self.state.state.batch_selected_names = [it.unique_name for it in items]
+
+        # Экспорт нужно пересобрать
+        self.state.invalidate_export()
+
+        st.success(f"✅ Loaded {len(items)} image(s) from backup archive.")
+        return True
 
     def _extract_images_from_zip(self, uploaded_zip):
         """Возвращает список (unique_name, bytes), дедуплицируя имена."""
@@ -241,8 +436,10 @@ class AppHandlers:
             st.error(f"❌ Segmentation failed: {str(e)}")
             st.rerun()
 
-    def handle_batchSegmentation(self):
-        images = self.state.state.get("batch_images_raw", [])
+    def handle_batchSegmentation(self, scale_mode):
+        all_images = self.state.state.get("batch_images_raw", [])
+        selected_map = self.state.state.get("batch_selected_map") or {}
+        images = [(n, d) for n, d in all_images if selected_map.get(n, True)]
         if not images:
             st.warning("No images to process.")
             return
@@ -284,6 +481,7 @@ class AppHandlers:
                 images,
                 progress_cb=_progress,
                 patch_progress_cb_factory=_patch_cb_factory,
+                scale_mode=scale_mode
             )
             items.sort(key=lambda it: it.unique_name.lower())
             self.state.state.batch_items = items
@@ -422,9 +620,7 @@ class AppHandlers:
             return
 
         # --- Освобождение памяти ---
-        # плотные маски уже не нужны ни CVAT (запакован), ни Excel (готов)
         for it in ok_items:
-            it.filtered_masks = {}
             it.exported = True
 
         self.state.state.export_dirty = False

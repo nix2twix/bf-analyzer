@@ -73,6 +73,5 @@ class Message:
         st.info("Upload an image first to import annotations.")
 
 class Error:
-
     def cantMatchAnnotation():
-        st.error(f"Can't render annotation correctly. Check if image size is match with annotation size.")
+        st.error(f"Can't render annotation correctly. Check names or check if image size is match with annotation size.")

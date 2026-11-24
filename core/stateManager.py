@@ -62,6 +62,9 @@ class StateManager:
         self.state.batch_errors = [] 
         self.state.batch_in_progress = False
         self.state.batch_images_raw = []
+        self.state.batch_selected_names = None 
+        self.state.lastBatchAnn = None
+        self.state.batch_selected_map = {}
 
         # PREDS
         self.state.probThreshold = 0.5
@@ -367,15 +370,14 @@ class StateManager:
 
     def setBatchMode(self, enabled: bool):
         self.state.batch_mode = bool(enabled)
+        self.state.batch_selected_names = None
+        self.state.lastBatchAnn = None
         self.reset_results()
-        if enabled:
-            self.state.batch_mode = bool(enabled)
-            self.reset_results()
-            self.state.batch_items = []
-            self.state.batch_zip_cvat = None
-            self.state.batch_zip_excel = None
-            self.state.batch_errors = []
-            self._clear_image_cache()
+        self.state.batch_items = []
+        self.state.batch_zip_cvat = None
+        self.state.batch_zip_excel = None
+        self.state.batch_errors = []
+        self._clear_image_cache()
 
     def clearBatch(self):
         self.state.batch_items = []

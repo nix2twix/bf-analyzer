@@ -109,6 +109,21 @@ class UIComponents:
             type=["bmp", "png", "jpg", "jpeg", "tif", "tiff", "zip"],
             key="uploader"
         )
+    def render_scaleSelector(self) -> list:
+        _container = st.container(horizontal=True, vertical_alignment="center")
+        with _container:
+            scale_options = ["First image only", "Each image", "Skip detection"]
+            _scale_mode = st.segmented_control(
+                "Scale detection:",
+                options=scale_options,
+                default=scale_options[0],
+                key="batch_scale_mode",
+                selection_mode="single",
+                required=True,
+                width="stretch",
+                help=f"Detect or scip the detection of scale bar per image. For each image it could be slow. If all images in batch have same scale, run \'first image only\'"
+            )
+        return scale_options, _scale_mode
     
     def render_modelSelector(self) -> str:
         """Отрисовывает селектор модели"""
@@ -132,7 +147,239 @@ class UIComponents:
                 return key
         
         return "Bacillus"
+
+
     
+    def render_batchSelectorUI(self, _raw):
+        """
+        Предпросмотр изображений из архива с возможностью выбора файлов.
+        Выбор сохраняется в batch_selected_map независимо от текущей страницы.
+        """
+        import io
+        from PIL import Image as PILImage, ImageOps
+
+        if not _raw:
+            return
+
+        selected_map = self.state.state.batch_selected_map
+        # === Управление выбором ===
+        _container = st.container(horizontal=True, vertical_alignment="center")
+        with _container:
+            if st.button("Select all", key="batch_select_all", width="stretch", type="primary"):
+                for name, _ in _raw:
+                    selected_map[name] = True
+                st.rerun()
+            if st.button("Deselect all", key="batch_deselect_all", width="stretch"):
+                for name, _ in _raw:
+                    selected_map[name] = False
+                st.rerun()
+
+        selected_count = sum(
+            selected_map.get(name, True) for name, _ in _raw
+        )
+
+        with _container:
+            st.caption(
+            f"Selected: {selected_count} / {len(_raw)} images"
+            )
+        
+        # === Пагинация ===
+        PAGE_SIZE = 4
+        total_pages = max(1, (len(_raw) + PAGE_SIZE - 1) // PAGE_SIZE)
+
+        if total_pages > 1:
+            page = st.pagination(
+                num_pages=total_pages,
+                default=1,
+                key="batch_preview_page",
+                width="stretch"
+            )
+        else:
+            page = 1
+
+        start = (page - 1) * PAGE_SIZE
+        chunk = _raw[start:start + PAGE_SIZE]
+
+        # === Предпросмотр ===
+        THUMB_W = 480
+        THUMB_H = 360
+
+        cols = st.columns(PAGE_SIZE, gap="small")
+
+        for col, (name, data) in zip(cols, chunk):
+            key = f"batch_chk_{name}"
+
+            # Восстанавливаем состояние чекбокса из общего словаря
+            st.session_state[key] = selected_map.get(name, True)
+
+            with col:
+                try:
+                    img = PILImage.open(io.BytesIO(data))
+                    img = ImageOps.exif_transpose(img).convert("L")
+
+                    # Масштабируем изображение, не изменяя пропорции
+                    img.thumbnail(
+                        (THUMB_W, THUMB_H),
+                        PILImage.Resampling.LANCZOS,
+                    )
+
+                    # Создаём холст с пропорциями 4:3
+                    canvas = PILImage.new(
+                        "L",
+                        (THUMB_W, THUMB_H),
+                        color=32,
+                    )
+
+                    x = (THUMB_W - img.width) // 2
+                    y = (THUMB_H - img.height) // 2
+                    canvas.paste(img, (x, y))
+                    st.image(canvas)
+
+                except Exception:
+                    st.warning(f"⚠️ Can't preview {name}")
+                st.markdown(
+                    """
+                    <style>
+                    div[data-testid="stCheckbox"] label p {
+                        display: -webkit-box;
+                        -webkit-box-orient: vertical;
+                        -webkit-line-clamp: 2;
+                        overflow: hidden;
+                        overflow-wrap: anywhere;
+                        line-height: 1.25;
+                        max-height: 2.5em;
+                    }
+                    </style>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.checkbox(
+                    name,
+                    key=key,
+                    on_change=lambda n=name, k=key: (
+                        selected_map.__setitem__(
+                            n, st.session_state[k]
+                        )
+                    ),
+                )
+
+
+    def render_batchSummaryTable(self):
+        """
+        Таблица batch-сводки через st.dataframe по 4 картинки.
+        Цвета классов — через эмодзи в заголовках (column_config).
+        """
+        import pandas as pd
+
+        items = self.state.state.get("batch_items", []) or []
+        if not items:
+            st.info("No batch results yet.")
+            return
+
+        items = sorted(items, key=lambda it: it.unique_name.lower())
+        config = self.state.getConfig()
+        if config is None:
+            return
+
+        class_names = [
+            c for c in config.class_names
+            if "background" not in c and c != "bg"
+        ]
+
+        def _class_title(c):
+            if hasattr(config, "class_titles") and c in config.class_titles:
+                return config.class_titles[c][0]
+            return c
+
+        _COLOR_EMOJI = ["🟢", "🟡", "🟣", "🔵", "⚪", "🔴"]
+        emoji_for_class = {
+            c: _COLOR_EMOJI[i % len(_COLOR_EMOJI)]
+            for i, c in enumerate(class_names)
+        }
+
+        PAGE_SIZE = 8
+        total_pages = max(1, (len(items) + PAGE_SIZE - 1) // PAGE_SIZE)
+        if total_pages > 1:
+            page = st.pagination(
+                num_pages=total_pages, default=1, key="batch_summary_page",
+            )
+        else:
+            page = 1
+
+        start = (page - 1) * PAGE_SIZE
+        page_items = items[start:start + PAGE_SIZE]
+
+        # --- Данные ---
+        rows = []
+        for idx, it in enumerate(page_items, start=start + 1):
+            has_scale = bool(getattr(it, "scale_ok", False)) and it.scale > 0
+            row = {
+                "#": idx,
+                "Image": it.unique_name,
+            }
+            total_px = it.width * it.height
+            for c in class_names:
+                title = _class_title(c)
+                stats = (it.stats or {}).get(c, {})
+                count = stats.get("count", 0)
+                area_px = stats.get("total_area_px", 0)
+                area_um2 = round(area_px * (it.scale ** 2), 2) if has_scale else "—"
+                percent = (area_px / total_px * 100.0) if total_px > 0 else 0.0
+                row[f"{title} count"] = count
+                if has_scale:
+                    row[f"{title} area (µm²)"] = area_um2
+                else: 
+                    row[f"{title} area (px²)"] = area_px 
+                row[f"{title} % area"] = round(percent, 2)
+            row["Scale (µm/px)"] = round(it.scale, 4) if has_scale else "—"
+            rows.append(row)
+
+        df = pd.DataFrame(rows)
+
+        column_config = {
+            "#": st.column_config.NumberColumn("#", width="small", format="%d"),
+            "Image": st.column_config.TextColumn("Image", width="medium"),
+            "Scale (µm/px)": st.column_config.TextColumn(
+                "Scale (µm/px)",
+                width="small",
+                help="Detected from the scale bar. '—' means not detected.",
+            ),
+        }
+        for c in class_names:
+            title = _class_title(c)
+            emoji = emoji_for_class.get(c, "⚪")
+            column_config[f"{title} count"] = st.column_config.NumberColumn(
+                f"{emoji} {title} count", width="small", format="%d",
+                help=f"Number of detected objects of class {title}",
+            )
+            column_config[f"{title} area (px²)"] = st.column_config.NumberColumn(
+                f"{emoji} area\n(px²)", width="small", format="%d",
+                help=f"{title}: total area in pixels²",
+            )
+            column_config[f"{title} area (µm²)"] = st.column_config.TextColumn(
+                f"{emoji} area\n(µm²)", width="small",
+                help=f"{title}: total area in µm² ('—' if scale not detected)",
+            )
+            column_config[f"{title} % area"] = st.column_config.NumberColumn(
+                f"{emoji} %\narea", width="small", format="%.2f",
+                help=f"{title}: percent of image area",
+            )
+
+        st.dataframe(
+            df,
+            column_config=column_config,
+            hide_index=True,
+            width="content"
+        )
+
+        # --- Ошибки ---
+        _err = [it for it in items if it.error is not None]
+        if _err:
+            st.error(f"⚠️ {len(_err)} file(s) failed")
+            with st.expander("Show errors", expanded=False):
+                for it in _err:
+                    st.markdown(f"❌ **{it.unique_name}** — {it.error}")
+
     def render_segmentationButton(self) -> bool:
         """Отрисовывает кнопку сегментации"""
         if self.state.state.get("segmentation_in_progress", False):
@@ -166,7 +413,7 @@ class UIComponents:
     def render_annotationUploader(self) -> Optional[Any]:
         """Отрисовывает только загрузчик аннотаций"""
         return st.file_uploader(
-            "⬇ Upload mask from CVAT (ZIP)",
+            "",
             type=['zip'],
             key="annotation_uploader_stats",
             disabled=False,

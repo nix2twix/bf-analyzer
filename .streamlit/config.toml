@@ -2,7 +2,7 @@
 	headless = true
 	address = "127.0.0.1"
 	baseUrlPath = "biofilms"
-
+	maxUploadSize = 1024
 
 [theme]
 	base = "dark"
@@ -10,3 +10,4 @@
 	backgroundColor = "#0E1117"
 	secondaryBackgroundColor = "#262730"	
 	linkColor = "#24b353"
+

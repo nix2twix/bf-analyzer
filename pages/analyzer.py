@@ -18,7 +18,7 @@ contentCol_workspace, gap, contentCol_tools = st.columns([2.5, 0.01, 1.5])
 
 # === PAGE CONTENT ===
 with contentCol_tools:
-    contentTab_tools = st.tabs(["🔬 Segmentation", "📊 Statistics & Tools"])
+    contentTab_tools = st.tabs(["🔬 Segmentation", "📊 Statistics & Annotations"])
     
     # Вкладка 1: Segmentation
     with contentTab_tools[0]:
@@ -46,19 +46,19 @@ with contentCol_tools:
             stManager.state.lastUploadedFileName = _current_name
         
         # 3. Запуск сегментации
-         # === BATCH ===
         if stManager.state.get("batch_mode", False):
+            # === BATCH ===
             _raw = stManager.state.get("batch_images_raw", [])
-            st.info(f"📦 Batch mode: {len(_raw)} image(s) detected in the archive.")
-
-            with st.expander("Show files", expanded=False):
-                for _n, _ in _raw:
-                    st.write(f"• {_n}")
-
+            _selected_map = stManager.state.get("batch_selected_map") or {}
+            stManager.state.batch_selected_names = [
+                _n for _n, _ in _raw
+                if _selected_map.get(_n, True)
+            ]
+            scale_options, scale_mode = ui.render_scaleSelector()
             if ui.render_batchSegmentationButton():
-                handlers.handle_batchSegmentation()
-
+                handlers.handle_batchSegmentation(scale_mode=scale_mode)
         else:
+            # === SINGLE ===
             seg_clicked = ui.render_segmentationButton()
             if seg_clicked:
                 handlers.handle_segmentation()
@@ -78,8 +78,7 @@ with contentCol_tools:
             stManager.state.objectsInfo is None):
             handlers.handle_statisticsUpdate()
             
-        # 4. Кнопки экспорта
-        st.markdown("📤 Export results")
+    st.markdown("📤 Export results")
     if ui.render_exportButtons(suffix="seg") == "prepare":
         if stManager.state.get("batch_mode", False):
             handlers.prepare_batchExportData()
@@ -95,7 +94,6 @@ with contentCol_tools:
             contentCol_filtration, gap, contentCol_statistics = st.columns([1.5, 0.01, 1.6])
             with contentCol_filtration:
                 st.markdown("⚙️ Filters")
-
             with contentCol_statistics:
                 st.markdown("📊 Statistics")
 
@@ -107,78 +105,73 @@ with contentCol_tools:
                     _filterParams = ui.render_filtrationUI(stManager.state.imgScale)
                     if _filterParams:
                         handlers.handle_filtration(_filterParams)
-                
                 with contentCol_statistics:
                     if stManager.state.filteredObjectsInfo is None:
                         stManager.state.filteredObjectsInfo = prepare_filteredObjectInfo(
                             stManager.state.filteredObjects
-                    )
-                    _resultInfo = handlers.handle_statisticsAppear()                
-                
+                        )
+                    _resultInfo = handlers.handle_statisticsAppear()
                     ui.render_statisticsContent(_resultInfo, stManager.state.imgAreaScaled)
                     st.markdown("📊 Tools")
                     st.markdown("")
                     ui.render_postprocessToggle()
-                    #ui.render_scale_bar()
 
-            st.markdown("📂 Import annotations")
-            if stManager.state.uploadedImage is not None:
-                _uploadedAnn = ui.render_annotationUploader()
-                if _uploadedAnn and _uploadedAnn != stManager.state.get("lastUploadedAnn"):
-                    if handlers.handle_annotationUpload(_uploadedAnn):
-                        handlers.handle_annotationApply(_uploadedAnn)
-                        stManager.state.lastUploadedAnn = _uploadedAnn
-                        handlers.handle_statisticsUpdate()
-                        ui.clear_imageCache()
-                        st.rerun()
-                    else:
-                        Error.cantMatchAnnotation()
-            else:
-                st.markdown("")
-                Message.needUploadImageToAnnotate()
-            
-            st.markdown("📤 Export results")
+        st.markdown("📂 Import CVAT-annotations")
+        _is_batch_or_empty = (
+            stManager.state.get("batch_mode", False)
+            or stManager.state.uploadedImage is None
+        )
+
+        if _is_batch_or_empty:
+            _uploadedAnn = st.file_uploader(
+                "",
+                label_visibility="collapsed",
+                type=["zip"],
+                key="batch_ann_uploader",
+                help = "Upload backup to compute statistics for batch or when no image is loaded",
+            )
+            if _uploadedAnn and _uploadedAnn != stManager.state.get("lastBatchAnn"):
+                ok = handlers.handle_batchAnnotationUpload(_uploadedAnn)
+                if ok:
+                    stManager.state.lastBatchAnn = _uploadedAnn
+                    stManager.state.lastBackupOnly = _uploadedAnn
+                    st.rerun()
+        else:
+            _uploadedAnn = ui.render_annotationUploader()
+            if _uploadedAnn and _uploadedAnn != stManager.state.get("lastUploadedAnn"):
+                if handlers.handle_annotationUpload(_uploadedAnn):
+                    handlers.handle_annotationApply(_uploadedAnn)
+                    stManager.state.lastUploadedAnn = _uploadedAnn
+                    handlers.handle_statisticsUpdate()
+                    ui.clear_imageCache()
+                    st.rerun()
+                else:
+                    Error.cantMatchAnnotation()
+
 # === Левая панель: Workspace ===
 with contentCol_workspace:
     if stManager.state.get("batch_mode", False):
-        # === BATCH: вместо overlay — сводка ===
+        _raw = stManager.state.get("batch_images_raw", [])
+        _selected_map = stManager.state.get("batch_selected_map") or {}
+        for _n, _ in _raw:
+            _key = f"batch_chk_{_n}"
+            if _key not in st.session_state:
+                st.session_state[_key] = _selected_map.get(_n, True)
+
+        st.markdown(f"### 📦 Batch processing")
+        with st.expander("Select files to process", expanded=True):
+            ui.render_batchSelectorUI(_raw)
+            _selected_map = stManager.state.get("batch_selected_map") or {}
+
+            stManager.state.batch_selected_names = [
+                _n for _n, _ in _raw
+                if _selected_map.get(_n, True)
+            ]
+        st.markdown("### 📊 Processing summary")
         _items = stManager.state.get("batch_items", []) or []
-
-        if not _items:
-            st.info(
-                "📦 Batch mode is active. Click "
-                "**Start batch segmentation** to see results here."
-            )
-        else:
-            _ok = [it for it in _items if it.error is None]
-            _err = [it for it in _items if it.error is not None]
-
-            st.markdown(
-                f"### 📊 Batch results: {len(_ok)} processed, {len(_err)} with errors"
-            )
-
-            # --- Обработанные ---
-            if _ok:
-                with st.expander("Show batch details", expanded=True):
-                    for it in _ok:
-                        counts = {
-                            k: v["count"]
-                            for k, v in (it.stats or {}).items()
-                            if v.get("count")
-                        }
-                        st.markdown(
-                            f"✅ **{it.unique_name}** — "
-                            f"`{counts or 'no objects'}`"
-                        )
-
-            # --- Ошибки ---
-            if _err:
-                st.error(f"⚠️ {len(_err)} file(s) failed")
-                with st.expander("Show errors", expanded=False):
-                    for it in _err:
-                        st.markdown(f"❌ **{it.unique_name}** — {it.error}")
+        if _items:
+            ui.render_batchSummaryTable()
     else:
-        # === SINGLE: как было ===
         if stManager.state.uploadedImage:
             stManager.state.scale_overlay = stManager.render_scaleOverlay()
             ui.render_overlayUI()
