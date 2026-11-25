@@ -3,7 +3,7 @@ import io
 from pathlib import Path
 from typing import List, Optional
 
-EXAMPLES_DIR = Path(__file__).resolve().parent.parent / "extra" / "examples"
+EXAMPLES_DIR = Path(__file__).resolve().parent.parent / "examples"
 
 EXAMPLE_FILES = [
     ("example1.bmp", "An example of a developing biofilm of bacillus (Pseudomonas Veronii)."),
