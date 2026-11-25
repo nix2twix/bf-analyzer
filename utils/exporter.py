@@ -341,40 +341,31 @@ def saveBatchSummaryAsZip(items, model_config, filtration_params=None):
     col_idx = {h: i + 1 for i, h in enumerate(headers)}
 
     # Цвета классов
-    def _class_color(c):
+    def _class_color_hex(c):
         if hasattr(model_config, "class_colors") and c in model_config.class_colors:
             r, g, b, a = model_config.class_colors[c]
             return f"{r:02X}{g:02X}{b:02X}"
         return "366092"
-
+    LEFT = Alignment(horizontal="left", vertical="center", wrap_text=True)
     # Строка 1: заголовки с переносом и цветом
     for c in class_names:
-        color_hex = _class_color(c)
+        color_hex = _class_color_hex(c)
         title = _class_title(c)
         for sub in ["count", "area (px²)", "area (µm²)", "% area"]:
             col_name = f"{title} {sub}"
             if col_name not in col_idx:
                 continue
             cell = ws.cell(row=1, column=col_idx[col_name])
-            # Перенос: biofilm / area (px²) — в одной ячейке на 2 строки
             cell.value = f"{title}\n{sub}"
-            cell.alignment = Alignment(
-                horizontal="center", vertical="center", wrap_text=True
-            )
-            cell.font = Font(bold=True, color="FFFFFF")
-            cell.fill = PatternFill(
-                start_color=color_hex, end_color=color_hex, fill_type="solid"
-            )
+            cell.alignment = LEFT
+            cell.font = Font(bold=True, color=color_hex)
 
     # Остальные заголовки — стандартный вид
     for h in headers:
         if h in col_idx and not any(h.startswith(_class_title(c)) for c in class_names):
             cell = ws.cell(row=1, column=col_idx[h])
-            cell.font = Font(bold=True, color="FFFFFF")
-            cell.alignment = Alignment(horizontal="center", vertical="center")
-            cell.fill = PatternFill(
-                start_color="366092", end_color="366092", fill_type="solid"
-            )
+            cell.font = Font(bold=True, color="000000")
+            cell.alignment = LEFT
 
     # --- Тело: "—" по центру, красным ---
     RED = Font(color="C00000", bold=True)
@@ -392,26 +383,28 @@ def saveBatchSummaryAsZip(items, model_config, filtration_params=None):
                 cell.value = "—"
                 cell.alignment = CENTER
                 cell.font = RED
+            else:
+                # Все обычные ячейки — по левому краю
+                cell.alignment = LEFT
 
-    # --- Ширины колонок ---
     for sheet_name in wb.sheetnames:
         ws2 = wb[sheet_name]
         for column in ws2.columns:
             max_length = 0
             col_letter = get_column_letter(column[0].column)
             for cell in column:
-                try:
-                    if cell.value is not None and len(str(cell.value)) > max_length:
-                        # Для заголовков с \n считаем длину по первой строке
-                        first_line = str(cell.value).split("\n")[0]
-                        max_length = max(max_length, len(first_line))
-                except Exception:
-                    pass
-            ws2.column_dimensions[col_letter].width = min(max_length + 1, 15)
+                if cell.value is None:
+                    continue
+                # Учитываем многострочные заголовки: берём самую длинную строку
+                for line in str(cell.value).split("\n"):
+                    max_length = max(max_length, len(line))
+            # Ограничиваем 6..40 символов
+            adjusted = max(6, min(max_length + 2, 40))
+            ws2.column_dimensions[col_letter].width = adjusted
 
         if sheet_name == "Batch summary":
-            ws2.column_dimensions["A"].width = 5
-            ws2.row_dimensions[1].height = 32  # под перенос шапки
+            ws2.column_dimensions["A"].width = 5   # под "#"
+            ws2.row_dimensions[1].height = 32        # под перенос шапки
 
         for cell in ws2[1]:
             cell.alignment = Alignment(
